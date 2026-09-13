@@ -1,0 +1,1808 @@
+/************************************
+IST659 - Group Project SQL
+Project: MINT Database
+Authors:  Nina Ysabel Alinsonorin
+          Kaitlyn Marie Blasi
+          Elizabeth Shoots
+          Cory Vanderpoel
+
+Date: 9/14/2025
+Version: 1.0
+************************************/
+
+if not exists (select * from sys.databases where name='mint')
+  create database mint
+GO
+use mint
+GO
+
+-- DOWN
+-- Removing FK Constraints
+if exists (select * from INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+  where CONSTRAINT_NAME = 'fk_assessments_student_id')
+    alter table assessments drop fk_assessments_student_id
+if exists (select * from INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+  where CONSTRAINT_NAME = 'fk_assessments_skill_id')
+    alter table assessments drop constraint fk_assessments_skill_id
+if exists (select * from INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+  where CONSTRAINT_NAME = 'fk_practice_logs_student_id')
+    alter table practice_logs drop constraint fk_practice_logs_student_id
+if exists (select * from INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+  where CONSTRAINT_NAME = 'fk_practice_logs_skill_id')
+    alter table practice_logs drop constraint fk_practice_logs_skill_id
+if exists (select * from INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+  where CONSTRAINT_NAME = 'fk_goals_student_id')
+    alter table goals drop constraint fk_goals_student_id
+if exists (select * from INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+  where CONSTRAINT_NAME = 'fk_goals_skill_id')
+    alter table goals drop constraint fk_goals_skill_id
+
+
+-- Dropping the tables if they exist
+drop table if exists goals
+drop table if exists practice_logs
+drop table if exists assessments
+drop table if exists math_skills
+drop table if exists students
+drop table if exists teachers
+drop table if exists resources
+
+
+--UP Metadata
+create table students (
+  students_student_id int identity not null,
+  students_last_name varchar(50) not null,
+  students_first_name varchar(50) not null,
+  students_email varchar(50) not null,
+  students_age int not null,
+  students_grade int not null,
+  students_teacher_id int not null,
+  constraint pk_students_student_id primary key(students_student_id),
+  constraint u_student_email unique(students_email)
+)
+
+create table teachers (
+  teachers_teacher_id int identity not null,
+  teachers_last_name varchar(50) not null,
+  teachers_first_name varchar(50) not null,
+  teachers_email varchar(50) not null,
+  teachers_grade int not null,
+  teachers_homeroom varchar(2) not null,
+  constraint pk_teachers_teacher_id primary key (teachers_teacher_id)
+)
+
+create table math_skills(
+  math_skills_skill_id int identity not null,
+  math_skills_name varchar(50) not null,
+  math_skills_grade_level varchar(50) not null,
+  math_skills_skill_description varchar(200) not null,
+  constraint pk_math_skill_id primary key (math_skills_skill_id)
+)
+    
+create table assessments(
+  assessments_assessment_id int identity not null,
+  assessments_student_id int not null,
+  assessments_skill_id int not null,
+  assessments_assessment_date date not null,
+  assessments_theorized_score int not null,
+  assessments_performance varchar(1) not null,
+  assessments_raw_score int not null,
+  assessments_percent_correct int not null,
+  constraint pk_assessment_id primary key (assessments_assessment_id)
+)
+
+create table practice_logs(
+  practice_logs_log_id int identity not null,
+  practice_logs_student_id int not null,
+  practice_logs_skill_id int not null,
+  practice_logs_practice_date date not null,
+  practice_logs_start_time time not null,
+  practice_logs_end_time time not null,
+  practice_logs_practice_score int not null,
+  constraint pk_practice_logs_log_id primary key (practice_logs_log_id)
+)
+
+create table goals(
+  goals_goal_id int identity not null,
+  goals_student_id int not null,
+  goals_skill_id int not null,
+  goals_min_score int not null,
+  goals_max_score int not null,
+  constraint pk_goals_goal_id primary key (goals_goal_id)
+)
+
+create table resources(
+  resources_resource_id int identity not null,
+  resources_resource_title varchar(100) not null,
+  resources_resource_author_name varchar(100) not null,
+  resources_resource_editor_name varchar(100) null,
+  resources_resource_format varchar(100) not null,
+  resources_resource_publication_date varchar(100) null,
+  resources_resource_edition varchar(100) null,
+  resources_resource_link varchar(100) null,
+  resources_skill_grade_level varchar(100) not null,
+  resources_skill_name varchar(100) not null,
+  constraint pk_resources_resource_id primary key (resources_resource_id)
+)
+
+alter table assessments
+  add constraint fk_assessments_student_id foreign key (assessments_student_id)
+    references students(students_student_id)
+alter table assessments
+  add constraint fk_assessments_skill_id foreign key (assessments_skill_id)
+    references math_skills(math_skills_skill_id)
+alter table practice_logs
+  add constraint fk_practice_logs_student_id foreign key (practice_logs_student_id)
+    references students(students_student_id)
+alter table practice_logs 
+  add constraint fk_practice_logs_skill_id foreign key (practice_logs_skill_id)
+    references math_skills(math_skills_skill_id)
+alter table goals
+  add constraint fk_goals_student_id foreign key (goals_student_id)
+    references students(students_student_id)
+alter table goals 
+  add constraint fk_goals_skill_id foreign key (goals_skill_id)
+    references math_skills(math_skills_skill_id)
+
+GO 
+
+--Stored Procedures
+/* This is for bulk inserting our starting data to the database. */
+create or alter procedure p_mint_upsert_students (
+  @student_id int, 
+  @last_name varchar(50), 
+  @first_name varchar(50),
+  @email_address varchar(50),
+  @age int,
+  @grade int,
+  @teacher_id int
+) as begin
+  declare @check_student_id int
+  select @check_student_id = students_student_id from students where students_student_id = @student_id
+  if (@check_student_id > 0) 
+    begin update students set 
+      students_last_name = @last_name, students_first_name = @first_name,
+      students_email= @email_address, students_age = @age,
+      students_grade = @grade, students_teacher_id = @teacher_id
+      where students_student_id = @student_id
+    end
+    else begin 
+      insert into 
+      students (students_student_id,students_last_name,students_first_name,students_email,students_age,students_grade,students_teacher_id)
+      values (@student_id,@last_name,@first_name,@email_address,@age,@grade,@teacher_id)
+    end
+end
+
+GO
+
+create or alter procedure p_mint_upsert_teachers (
+  @teacher_id int, 
+  @last_name varchar(50), 
+  @first_name varchar(50),
+  @email_address varchar(50),
+  @grade int,
+  @homeroom varchar(2)
+) as begin
+  declare @check_teacher_id int
+  select @check_teacher_id = teachers_teacher_id from teachers where teachers_teacher_id = @teacher_id
+  if (@check_teacher_id > 0) 
+    begin update teachers set 
+      teachers_last_name = @last_name,
+      teachers_first_name = @first_name,  teachers_email= @email_address,
+      teachers_grade = @grade,  teachers_homeroom = @homeroom where teachers_teacher_id = @teacher_id
+    end
+    else begin 
+      insert into 
+      teachers (teachers_teacher_id,teachers_last_name,teachers_first_name,teachers_email,teachers_grade,teachers_homeroom) 
+      values (@teacher_id,@last_name,@first_name,@email_address,@grade,@homeroom)
+    end
+end;
+
+GO
+
+create or alter procedure p_mint_upsert_mathskills (
+  @skill_id int, 
+  @skill_name varchar(50), 
+  @skill_grade varchar(50),
+  @skill_description varchar(200)
+) as begin
+  declare @check_skill_id int
+  select @check_skill_id = math_skills_skill_id from math_skills where math_skills_skill_id = @skill_id
+  if (@check_skill_id > 0) 
+    begin update math_skills set 
+      math_skills_name = @skill_name, math_skills_grade_level = @skill_grade, 
+      math_skills_skill_description = @skill_description 
+      where math_skills_skill_id = @check_skill_id
+    end
+    else begin 
+      insert into 
+      math_skills (math_skills_skill_id,math_skills_name,math_skills_grade_level,math_skills_skill_description) 
+      values (@skill_id,@skill_name,@skill_grade,@skill_description)
+    end
+end
+
+Go 
+
+create or alter procedure p_mint_upsert_mathgoals (
+  @goal_id int, 
+  @student_id int, 
+  @skill_id int,
+  @min_score int,
+  @max_score int
+) as begin
+  declare @check_goal_id int
+  select @check_goal_id = goals_goal_id from goals where goals_goal_id = @check_goal_id
+  if (@check_goal_id > 0) 
+    begin update goals set 
+      goals_student_id = @student_id, goals_skill_id = @skill_id, 
+      goals_min_score = @min_score, goals_max_score = @max_score
+      where goals_goal_id = @check_goal_id
+    end
+    else begin 
+      insert into 
+      goals (goals_goal_id,goals_student_id,goals_skill_id,goals_min_score,goals_max_score) 
+      values (@goal_id,@student_id,@skill_id,@min_score,@max_score)
+    end
+end
+
+GO
+
+create or alter procedure p_mint_upsert_assessments (
+  @assessment_id int, 
+  @student_id int, 
+  @skill_id int,
+  @assessment_date date,
+  @theorized_score int,
+  @performance varchar(1),
+  @raw_score int,
+  @percent_correct int
+) as begin
+  declare @check_assessment_id int
+  select @check_assessment_id = assessments_assessment_id from assessments where assessments_assessment_id = @assessment_id
+  if (@check_assessment_id > 0) 
+    begin update assessments set 
+      assessments_student_id = @student_id, assessments_skill_id = @skill_id, 
+      assessments_assessment_date = @assessment_date, assessments_theorized_score = @theorized_score,
+      assessments_performance = @performance, assessments_raw_score = @raw_score,
+      assessments_percent_correct = @percent_correct
+      where assessments_assessment_id = @check_assessment_id
+    end
+    else begin 
+      insert into 
+      assessments (assessments_assessment_id,assessments_student_id,assessments_skill_id,assessments_assessment_date,
+        assessments_theorized_score,assessments_performance,assessments_raw_score,assessments_percent_correct) 
+      values (@assessment_id,@student_id,@skill_id,@assessment_date,@theorized_score,@performance,@raw_score,@percent_correct)
+    end
+end
+
+GO
+
+create or alter procedure p_mint_upsert_practicelogs (
+  @log_id int, 
+  @student_id int, 
+  @skill_id int,
+  @practice_date date,
+  @start_time time,
+  @end_time time,
+  @practice_score int
+) as begin
+  declare @check_log_id int
+  select @check_log_id = practice_logs_log_id from practice_logs where practice_logs_log_id = @log_id
+  if (@check_log_id > 0) 
+    begin update practice_logs set 
+      practice_logs_student_id = @student_id, practice_logs_skill_id = @skill_id, 
+      practice_logs_practice_date = @practice_date, practice_logs_start_time = @start_time,
+      practice_logs_end_time = @end_time, practice_logs_practice_score = @practice_score
+      where practice_logs_log_id = @check_log_id
+    end
+    else begin 
+      insert into 
+      practice_logs (practice_logs_log_id,practice_logs_student_id,practice_logs_skill_id,practice_logs_practice_date,
+        practice_logs_start_time,practice_logs_end_time,practice_logs_practice_score) 
+      values (@log_id,@student_id,@skill_id,@practice_date,@start_time,@end_time,@practice_score)
+    end
+end
+
+GO
+create or alter procedure p_mint_upsert_resources (
+  @resource_id int, 
+  @resource_tite varchar(100),
+  @author_name varchar(100), 
+  @editor_name varchar(100),
+  @format varchar(100),
+  @publication_date varchar(100),
+  @edition varchar(100),
+  @resource_link varchar(100),
+  @grade_level varchar(100),
+  @skill_name varchar(100)
+) as begin
+  declare @check_resource_id int
+  select @check_resource_id = resources_resource_id from resources where resources_resource_id = @resource_id
+  if (@check_resource_id > 0) 
+    begin update resources set 
+      resources_resource_title = @resource_tite, resources_resource_author_name = @author_name,
+      resources_resource_editor_name= @editor_name, resources_resource_format = @format,
+      resources_resource_publication_date = @publication_date, resources_resource_edition = @edition,
+      resources_resource_link = @resource_link, resources_skill_grade_level = @grade_level,
+      resources_skill_name = @skill_name
+      where resources_resource_id = @resource_id
+    end
+    else begin 
+      insert into 
+      resources (resources_resource_id, resources_resource_title,resources_resource_author_name,resources_resource_editor_name,resources_resource_format,resources_resource_publication_date,resources_resource_edition,resources_resource_link,resources_skill_grade_level,resources_skill_name)
+      values (@resource_id,@resource_tite,@author_name,   @editor_name,  @format,  @publication_date,  @edition,  @resource_link,  @grade_level,  @skill_name)
+    end
+end
+
+GO
+
+--UP Data
+--Adding data to the teachers table
+set IDENTITY_INSERT teachers ON
+EXECUTE p_mint_upsert_teachers 1,'Alinsonorin','Nina','Nina.Alinsonorin@gmail.com',1,'1B'
+EXECUTE p_mint_upsert_teachers 2,'Blasi','Kaitlyn','Kaitlyn.Blasi@gmail.com',1,'1A'
+EXECUTE p_mint_upsert_teachers 3,'Vanderpoel','Cory','Cory.Vanderpoel@gmail.com',2,'2B'
+EXECUTE p_mint_upsert_teachers 4,'Shoots','Elizabeth','Elizabeth.Shoots@gmail.com',2,'2A'
+set IDENTITY_INSERT teachers OFF
+--select * from teachers
+
+--Adding Data to the students table
+set IDENTITY_INSERT students ON
+EXECUTE p_mint_upsert_students 80852,'Rogers','Robert','Robert.Rogers@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 84065,'Campbell','Jeremiah','Jeremiah.Campbell@gmail.com',7,2,3
+EXECUTE p_mint_upsert_students 85551,'Edwards ','Lauren','Lauren.Edwards @gmail.com',7,2,3
+EXECUTE p_mint_upsert_students 85995,'Parker','Payton','Payton.Parker@gmail.com',7,2,3
+EXECUTE p_mint_upsert_students 86548,'Carter','Manny','Manny.Carter@gmail.com',7,2,3
+EXECUTE p_mint_upsert_students 86591,'Morris','Bianca','Bianca.Morris@gmail.com',7,2,3
+EXECUTE p_mint_upsert_students 86670,'Torres','Tate','Tate.Torres@gmail.com',7,2,3
+EXECUTE p_mint_upsert_students 86692,'Richardson','Richard','Richard.Richardson@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 87099,'Bennett','Thomas','Thomas.Bennett@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 87473,'Reed','William','William.Reed@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 88387,'Murphy','Sher','Sher.Murphy@gmail.com',7,2,3
+EXECUTE p_mint_upsert_students 88504,'Bailey','Elizabeth','Elizabeth.Bailey@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 88549,'Stewart','Espen','Espen.Stewart@gmail.com',7,2,3
+EXECUTE p_mint_upsert_students 89115,'Cox','Lisa','Lisa.Cox@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 89138,'Evans','Frito','Frito.Evans@gmail.com',7,2,3
+EXECUTE p_mint_upsert_students 89316,'Mitchell','Nancy','Nancy.Mitchell@gmail.com',7,2,3
+EXECUTE p_mint_upsert_students 89457,'Howard','Matthew','Matthew.Howard@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 89471,'Reyes','Charles','Charles.Reyes@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 89607,'Turner','Pond','Pond.Turner@gmail.com',7,2,3
+EXECUTE p_mint_upsert_students 89702,'Bell','David','David.Bell@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 89728,'Nguyen','Mary','Mary.Nguyen@gmail.com',7,2,3
+EXECUTE p_mint_upsert_students 89765,'Collins','Mocha','Mocha.Collins@gmail.com',7,2,3
+EXECUTE p_mint_upsert_students 89768,'Cruz','Daniel','Daniel.Cruz@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 89974,'Peterson','Michael','Michael.Peterson@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 90198,'Morgan','Jennifer','Jennifer.Morgan@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 90617,'Gray','Sarah','Sarah.Gray@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 90661,'Flores','Park','Park.Flores@gmail.com',7,2,3
+EXECUTE p_mint_upsert_students 91733,'Watson','Joseph','Joseph.Watson@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 91814,'Hill','Waylen','Waylen.Hill@gmail.com',7,2,3
+EXECUTE p_mint_upsert_students 92249,'James','Karen','Karen.James@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 93253,'Phillips','Newt','Newt.Phillips@gmail.com',7,2,3
+EXECUTE p_mint_upsert_students 93956,'Kelly','Barbara','Barbara.Kelly@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 95324,'Wong','Kevin','Kevin.Wong@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 96097,'Brown','Case','Case.Brown@gmail.com',6,1,1
+EXECUTE p_mint_upsert_students 96541,'Ramirez','Jane','Jane.Ramirez@gmail.com',7,2,3
+EXECUTE p_mint_upsert_students 97097,'Cook','Patricia','Patricia.Cook@gmail.com',7,2,3
+EXECUTE p_mint_upsert_students 97127,'Scott','Bubbles','Bubbles.Scott@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 97294,'Walker','Phoenix','Phoenix.Walker@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 98761,'Allen','Bowie','Bowie.Allen@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 98842,'Taylor','Max','Max.Taylor@gmail.com',6,1,1
+EXECUTE p_mint_upsert_students 99303,'Hall','Oakley','Oakley.Hall@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 99494,'Martinez','Quinn','Quinn.Martinez@gmail.com',6,1,1
+EXECUTE p_mint_upsert_students 99890,'Sanchez','Echo','Echo.Sanchez@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 99936,'Wright','Sunny','Sunny.Wright@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 100685,'Harris','Sage','Sage.Harris@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 100954,'Martin','Logan','Logan.Martin@gmail.com',6,1,1
+EXECUTE p_mint_upsert_students 100969,'Clark','Parker','Parker.Clark@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 101349,'Perez','Indigo ','Indigo .Perez@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 101965,'Nelson','Ziggy','Ziggy.Nelson@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 102102,'Johnson','Taylor','Taylor.Johnson@gmail.com',6,1,1
+EXECUTE p_mint_upsert_students 102110,'Lee','River','River.Lee@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 102957,'Thompson','Jax ','Jax .Thompson@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 103346,'Gonzalez','Rowan','Rowan.Gonzalez@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 103647,'Lopez','Finn','Finn.Lopez@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 103884,'Wilson','Skyler','Skyler.Wilson@gmail.com',6,1,1
+EXECUTE p_mint_upsert_students 103985,'Green','Pickles','Pickles.Green@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 104357,'Moore','Blake','Blake.Moore@gmail.com',6,1,1
+EXECUTE p_mint_upsert_students 104555,'Adams','Scooter','Scooter.Adams@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 104777,'Hernandez ','Drew','Drew.Hernandez @gmail.com',6,1,1
+EXECUTE p_mint_upsert_students 104809,'White','Kai','Kai.White@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 105906,'King','Lulu','Lulu.King@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 106016,'Williams','Jordan','Jordan.Williams@gmail.com',6,1,1
+EXECUTE p_mint_upsert_students 106088,'Anderson','Sam','Sam.Anderson@gmail.com',6,1,1
+EXECUTE p_mint_upsert_students 106729,'Miller','Jamie','Jamie.Miller@gmail.com',6,1,1
+EXECUTE p_mint_upsert_students 108015,'Jackson ','Cameron','Cameron.Jackson @gmail.com',6,1,1
+EXECUTE p_mint_upsert_students 108679,'Robinson','Emerson','Emerson.Robinson@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 109302,'Thomas','Charlie','Charlie.Thomas@gmail.com',6,1,1
+EXECUTE p_mint_upsert_students 110215,'Jones','Riley','Riley.Jones@gmail.com',6,1,1
+EXECUTE p_mint_upsert_students 110503,'Wood','Susan','Susan.Wood@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 111269,'Cooper','Linda','Linda.Cooper@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 111457,'Allen','Justice','Justice.Allen@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 112277,'Brooks','Jessica','Jessica.Brooks@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 112632,'Smith','Alex ','Alex .Smith@gmail.com',6,1,1
+EXECUTE p_mint_upsert_students 112638,'Rivera','Mango','Mango.Rivera@gmail.com',7,2,3
+EXECUTE p_mint_upsert_students 117101,'Davis','Morgan','Morgan.Davis@gmail.com',6,1,1
+EXECUTE p_mint_upsert_students 117552,'Lewis','Hunter','Hunter.Lewis@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 117725,'Garcia','Avery','Avery.Garcia@gmail.com',6,1,1
+EXECUTE p_mint_upsert_students 119445,'Young','Marley','Marley.Young@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 119576,'Alvarado','Paula','Paula.Alvarado@gmail.com',7,2,4
+EXECUTE p_mint_upsert_students 123513,'Baker','Bobi ','Bobi .Baker@gmail.com',6,1,2
+EXECUTE p_mint_upsert_students 124761,'Rodriguez','Dakota','Dakota.Rodriguez@gmail.com',6,1,1
+EXECUTE p_mint_upsert_students 124995,'Roberts','Sprout','Sprout.Roberts@gmail.com',7,2,3
+set IDENTITY_INSERT students OFF
+
+--select * from students
+
+--Adding Math_Skills
+set IDENTITY_INSERT math_skills ON
+EXECUTE p_mint_upsert_mathskills 1,'Place_Value','Beginning_1','Students begin to understand place value by learning that digits in numbers have different meanings depending on their position. They practice reading, writing, and representing numbers up to 120 using tens and ones'
+EXECUTE p_mint_upsert_mathskills 2,'Addition_Subtraction','Middle_1','Students build fluency with addition and subtraction within 20. They practice strategies such as counting on, making ten, and using related facts, while developing understanding of the relationship between addition and subtraction'
+EXECUTE p_mint_upsert_mathskills 3,'Count_Read_Write_120','End_1','Students demonstrate mastery of counting, reading, and writing numbers up to 120. They deepen place value understanding by grouping tens and ones, comparing two-digit numbers, and using place value knowledge to solve problems'
+EXECUTE p_mint_upsert_mathskills 4,'Add_Subtract_Regroup_100','Beginning_2','Students extend their place value knowledge to add and subtract within 120. They use strategies such as decomposing numbers, regrouping tens and ones, and applying place value reasoning to solve problems with fluency and accuracy'
+EXECUTE p_mint_upsert_mathskills 5,'BaseTen_PlaceValue','Middle_2','Students deepen their understanding of base-ten place value by working with numbers up to 1,000. They recognize that each digit represents hundreds, tens, or ones, and use this understanding to compare, order, and represent numbers in different forms (standard, expanded, models)'
+EXECUTE p_mint_upsert_mathskills 6,'NumberSense_Operations','End_2','Students strengthen number sense and operations by adding and subtracting within 1,000 using place value strategies, properties of operations, and regrouping. They begin to understand multiplication as repeated addition and division as equal sharing or grouping, laying the foundation for future fluency'
+set IDENTITY_INSERT math_skills OFF
+
+--select * from math_skills
+
+--Adding Math Goals
+set IDENTITY_INSERT goals ON
+EXECUTE p_mint_upsert_mathgoals 1,112632,1,65,93
+EXECUTE p_mint_upsert_mathgoals 2,102102,1,61,90
+EXECUTE p_mint_upsert_mathgoals 3,106016,1,66,95
+EXECUTE p_mint_upsert_mathgoals 4,96097,1,80,89
+EXECUTE p_mint_upsert_mathgoals 5,110215,1,61,88
+EXECUTE p_mint_upsert_mathgoals 6,106729,1,91,92
+EXECUTE p_mint_upsert_mathgoals 7,117101,1,75,99
+EXECUTE p_mint_upsert_mathgoals 8,117725,1,88,92
+EXECUTE p_mint_upsert_mathgoals 9,124761,1,66,93
+EXECUTE p_mint_upsert_mathgoals 10,103884,1,69,88
+EXECUTE p_mint_upsert_mathgoals 11,99494,1,56,100
+EXECUTE p_mint_upsert_mathgoals 12,106088,1,78,94
+EXECUTE p_mint_upsert_mathgoals 13,98842,1,67,99
+EXECUTE p_mint_upsert_mathgoals 14,109302,1,60,96
+EXECUTE p_mint_upsert_mathgoals 15,104777,1,82,96
+EXECUTE p_mint_upsert_mathgoals 16,104357,1,84,86
+EXECUTE p_mint_upsert_mathgoals 17,100954,1,70,83
+EXECUTE p_mint_upsert_mathgoals 18,108015,1,77,92
+EXECUTE p_mint_upsert_mathgoals 19,102957,1,50,96
+EXECUTE p_mint_upsert_mathgoals 20,104809,1,62,93
+EXECUTE p_mint_upsert_mathgoals 21,103647,1,92,97
+EXECUTE p_mint_upsert_mathgoals 22,100685,1,70,85
+EXECUTE p_mint_upsert_mathgoals 23,102110,1,65,98
+EXECUTE p_mint_upsert_mathgoals 24,103346,1,86,91
+EXECUTE p_mint_upsert_mathgoals 25,100969,1,62,85
+EXECUTE p_mint_upsert_mathgoals 26,117552,1,65,97
+EXECUTE p_mint_upsert_mathgoals 27,108679,1,80,100
+EXECUTE p_mint_upsert_mathgoals 28,111457,1,58,100
+EXECUTE p_mint_upsert_mathgoals 29,97294,1,53,81
+EXECUTE p_mint_upsert_mathgoals 30,101349,1,68,83
+EXECUTE p_mint_upsert_mathgoals 31,99303,1,75,91
+EXECUTE p_mint_upsert_mathgoals 32,119445,1,84,88
+EXECUTE p_mint_upsert_mathgoals 33,98761,1,72,88
+EXECUTE p_mint_upsert_mathgoals 34,99890,1,89,93
+EXECUTE p_mint_upsert_mathgoals 35,99936,1,84,85
+EXECUTE p_mint_upsert_mathgoals 36,105906,1,54,83
+EXECUTE p_mint_upsert_mathgoals 37,97127,1,61,82
+EXECUTE p_mint_upsert_mathgoals 38,103985,1,84,87
+EXECUTE p_mint_upsert_mathgoals 39,123513,1,75,99
+EXECUTE p_mint_upsert_mathgoals 40,104555,1,56,89
+EXECUTE p_mint_upsert_mathgoals 41,101965,1,75,92
+EXECUTE p_mint_upsert_mathgoals 42,112632,2,52,93
+EXECUTE p_mint_upsert_mathgoals 43,102102,2,61,87
+EXECUTE p_mint_upsert_mathgoals 44,106016,2,61,84
+EXECUTE p_mint_upsert_mathgoals 45,96097,2,70,87
+EXECUTE p_mint_upsert_mathgoals 46,110215,2,57,86
+EXECUTE p_mint_upsert_mathgoals 47,106729,2,51,83
+EXECUTE p_mint_upsert_mathgoals 48,117101,2,71,81
+EXECUTE p_mint_upsert_mathgoals 49,117725,2,73,83
+EXECUTE p_mint_upsert_mathgoals 50,124761,2,77,89
+EXECUTE p_mint_upsert_mathgoals 51,103884,2,80,91
+EXECUTE p_mint_upsert_mathgoals 52,99494,2,83,99
+EXECUTE p_mint_upsert_mathgoals 53,106088,2,70,89
+EXECUTE p_mint_upsert_mathgoals 54,98842,2,56,81
+EXECUTE p_mint_upsert_mathgoals 55,109302,2,67,96
+EXECUTE p_mint_upsert_mathgoals 56,104777,2,80,84
+EXECUTE p_mint_upsert_mathgoals 57,104357,2,53,80
+EXECUTE p_mint_upsert_mathgoals 58,100954,2,70,86
+EXECUTE p_mint_upsert_mathgoals 59,108015,2,59,87
+EXECUTE p_mint_upsert_mathgoals 60,102957,2,89,97
+EXECUTE p_mint_upsert_mathgoals 61,104809,2,50,94
+EXECUTE p_mint_upsert_mathgoals 62,103647,2,54,82
+EXECUTE p_mint_upsert_mathgoals 63,100685,2,98,100
+EXECUTE p_mint_upsert_mathgoals 64,102110,2,87,91
+EXECUTE p_mint_upsert_mathgoals 65,103346,2,70,97
+EXECUTE p_mint_upsert_mathgoals 66,100969,2,93,96
+EXECUTE p_mint_upsert_mathgoals 67,117552,2,82,86
+EXECUTE p_mint_upsert_mathgoals 68,108679,2,66,83
+EXECUTE p_mint_upsert_mathgoals 69,111457,2,68,96
+EXECUTE p_mint_upsert_mathgoals 70,97294,2,55,84
+EXECUTE p_mint_upsert_mathgoals 71,101349,2,69,84
+EXECUTE p_mint_upsert_mathgoals 72,99303,2,76,82
+EXECUTE p_mint_upsert_mathgoals 73,119445,2,54,94
+EXECUTE p_mint_upsert_mathgoals 74,98761,2,72,100
+EXECUTE p_mint_upsert_mathgoals 75,99890,2,59,82
+EXECUTE p_mint_upsert_mathgoals 76,99936,2,55,81
+EXECUTE p_mint_upsert_mathgoals 77,105906,2,52,81
+EXECUTE p_mint_upsert_mathgoals 78,97127,2,74,97
+EXECUTE p_mint_upsert_mathgoals 79,103985,2,84,89
+EXECUTE p_mint_upsert_mathgoals 80,123513,2,60,87
+EXECUTE p_mint_upsert_mathgoals 81,104555,2,78,81
+EXECUTE p_mint_upsert_mathgoals 82,101965,2,64,89
+EXECUTE p_mint_upsert_mathgoals 83,112632,3,60,96
+EXECUTE p_mint_upsert_mathgoals 84,102102,3,65,80
+EXECUTE p_mint_upsert_mathgoals 85,96097,3,51,80
+EXECUTE p_mint_upsert_mathgoals 86,110215,3,68,91
+EXECUTE p_mint_upsert_mathgoals 87,106729,3,63,88
+EXECUTE p_mint_upsert_mathgoals 88,117101,3,58,85
+EXECUTE p_mint_upsert_mathgoals 89,117725,3,58,91
+EXECUTE p_mint_upsert_mathgoals 90,124761,3,64,81
+EXECUTE p_mint_upsert_mathgoals 91,99494,3,51,83
+EXECUTE p_mint_upsert_mathgoals 92,106088,3,54,87
+EXECUTE p_mint_upsert_mathgoals 93,98842,3,88,93
+EXECUTE p_mint_upsert_mathgoals 94,109302,3,60,88
+EXECUTE p_mint_upsert_mathgoals 95,104777,3,65,88
+EXECUTE p_mint_upsert_mathgoals 96,104357,3,54,93
+EXECUTE p_mint_upsert_mathgoals 97,100954,3,52,86
+EXECUTE p_mint_upsert_mathgoals 98,108015,3,74,99
+EXECUTE p_mint_upsert_mathgoals 99,102957,3,85,88
+EXECUTE p_mint_upsert_mathgoals 100,104809,3,61,81
+EXECUTE p_mint_upsert_mathgoals 101,103647,3,91,92
+EXECUTE p_mint_upsert_mathgoals 102,100685,3,54,81
+EXECUTE p_mint_upsert_mathgoals 103,102110,3,67,99
+EXECUTE p_mint_upsert_mathgoals 104,103346,3,55,100
+EXECUTE p_mint_upsert_mathgoals 105,117552,3,82,89
+EXECUTE p_mint_upsert_mathgoals 106,108679,3,77,83
+EXECUTE p_mint_upsert_mathgoals 107,111457,3,61,80
+EXECUTE p_mint_upsert_mathgoals 108,97294,3,54,91
+EXECUTE p_mint_upsert_mathgoals 109,101349,3,77,97
+EXECUTE p_mint_upsert_mathgoals 110,99303,3,53,96
+EXECUTE p_mint_upsert_mathgoals 111,119445,3,67,88
+EXECUTE p_mint_upsert_mathgoals 112,98761,3,77,96
+EXECUTE p_mint_upsert_mathgoals 113,99890,3,66,96
+EXECUTE p_mint_upsert_mathgoals 114,99936,3,70,80
+EXECUTE p_mint_upsert_mathgoals 115,105906,3,50,82
+EXECUTE p_mint_upsert_mathgoals 116,97127,3,52,80
+EXECUTE p_mint_upsert_mathgoals 117,103985,3,68,80
+EXECUTE p_mint_upsert_mathgoals 118,123513,3,81,82
+EXECUTE p_mint_upsert_mathgoals 119,104555,3,56,82
+EXECUTE p_mint_upsert_mathgoals 120,101965,3,66,83
+EXECUTE p_mint_upsert_mathgoals 121,96541,4,68,84
+EXECUTE p_mint_upsert_mathgoals 122,91814,4,67,84
+EXECUTE p_mint_upsert_mathgoals 123,84065,4,82,93
+EXECUTE p_mint_upsert_mathgoals 124,89316,4,54,91
+EXECUTE p_mint_upsert_mathgoals 125,124995,4,82,87
+EXECUTE p_mint_upsert_mathgoals 126,86548,4,73,81
+EXECUTE p_mint_upsert_mathgoals 127,93253,4,87,99
+EXECUTE p_mint_upsert_mathgoals 128,89138,4,60,83
+EXECUTE p_mint_upsert_mathgoals 129,89607,4,69,82
+EXECUTE p_mint_upsert_mathgoals 130,86670,4,76,91
+EXECUTE p_mint_upsert_mathgoals 131,85995,4,59,93
+EXECUTE p_mint_upsert_mathgoals 132,89765,4,80,87
+EXECUTE p_mint_upsert_mathgoals 133,85551,4,63,92
+EXECUTE p_mint_upsert_mathgoals 134,88549,4,84,85
+EXECUTE p_mint_upsert_mathgoals 135,90661,4,69,86
+EXECUTE p_mint_upsert_mathgoals 136,86591,4,51,90
+EXECUTE p_mint_upsert_mathgoals 137,88387,4,74,91
+EXECUTE p_mint_upsert_mathgoals 138,112638,4,79,88
+EXECUTE p_mint_upsert_mathgoals 139,89728,4,69,89
+EXECUTE p_mint_upsert_mathgoals 140,97097,4,52,91
+EXECUTE p_mint_upsert_mathgoals 141,80852,4,66,86
+EXECUTE p_mint_upsert_mathgoals 142,90198,4,54,84
+EXECUTE p_mint_upsert_mathgoals 143,89974,4,73,96
+EXECUTE p_mint_upsert_mathgoals 144,111269,4,70,82
+EXECUTE p_mint_upsert_mathgoals 145,87473,4,96,99
+EXECUTE p_mint_upsert_mathgoals 146,88504,4,50,98
+EXECUTE p_mint_upsert_mathgoals 147,89702,4,53,86
+EXECUTE p_mint_upsert_mathgoals 148,93956,4,71,80
+EXECUTE p_mint_upsert_mathgoals 149,86692,4,72,82
+EXECUTE p_mint_upsert_mathgoals 150,110503,4,88,96
+EXECUTE p_mint_upsert_mathgoals 151,91733,4,62,86
+EXECUTE p_mint_upsert_mathgoals 152,112277,4,57,80
+EXECUTE p_mint_upsert_mathgoals 153,87099,4,58,80
+EXECUTE p_mint_upsert_mathgoals 154,90617,4,53,88
+EXECUTE p_mint_upsert_mathgoals 155,92249,4,52,92
+EXECUTE p_mint_upsert_mathgoals 156,89471,4,71,90
+EXECUTE p_mint_upsert_mathgoals 157,89768,4,81,90
+EXECUTE p_mint_upsert_mathgoals 158,89115,4,56,82
+EXECUTE p_mint_upsert_mathgoals 159,89457,4,65,80
+EXECUTE p_mint_upsert_mathgoals 160,119576,4,74,80
+EXECUTE p_mint_upsert_mathgoals 161,95324,4,63,96
+EXECUTE p_mint_upsert_mathgoals 162,96541,5,69,92
+EXECUTE p_mint_upsert_mathgoals 163,91814,5,58,87
+EXECUTE p_mint_upsert_mathgoals 164,84065,5,83,99
+EXECUTE p_mint_upsert_mathgoals 165,89316,5,63,93
+EXECUTE p_mint_upsert_mathgoals 166,124995,5,82,92
+EXECUTE p_mint_upsert_mathgoals 167,86548,5,83,95
+EXECUTE p_mint_upsert_mathgoals 168,93253,5,90,98
+EXECUTE p_mint_upsert_mathgoals 169,89138,5,53,91
+EXECUTE p_mint_upsert_mathgoals 170,89607,5,60,94
+EXECUTE p_mint_upsert_mathgoals 171,86670,5,94,99
+EXECUTE p_mint_upsert_mathgoals 172,85995,5,71,99
+EXECUTE p_mint_upsert_mathgoals 173,89765,5,62,80
+EXECUTE p_mint_upsert_mathgoals 174,85551,5,54,86
+EXECUTE p_mint_upsert_mathgoals 175,88549,5,67,80
+EXECUTE p_mint_upsert_mathgoals 176,90661,5,79,83
+EXECUTE p_mint_upsert_mathgoals 177,86591,5,55,93
+EXECUTE p_mint_upsert_mathgoals 178,88387,5,57,90
+EXECUTE p_mint_upsert_mathgoals 179,112638,5,85,89
+EXECUTE p_mint_upsert_mathgoals 180,89728,5,73,83
+EXECUTE p_mint_upsert_mathgoals 181,97097,5,70,87
+EXECUTE p_mint_upsert_mathgoals 182,80852,5,74,80
+EXECUTE p_mint_upsert_mathgoals 183,90198,5,57,92
+EXECUTE p_mint_upsert_mathgoals 184,89974,5,77,84
+EXECUTE p_mint_upsert_mathgoals 185,111269,5,59,92
+EXECUTE p_mint_upsert_mathgoals 186,87473,5,76,88
+EXECUTE p_mint_upsert_mathgoals 187,88504,5,67,99
+EXECUTE p_mint_upsert_mathgoals 188,89702,5,86,95
+EXECUTE p_mint_upsert_mathgoals 189,93956,5,70,90
+EXECUTE p_mint_upsert_mathgoals 190,86692,5,63,82
+EXECUTE p_mint_upsert_mathgoals 191,110503,5,64,89
+EXECUTE p_mint_upsert_mathgoals 192,91733,5,58,88
+EXECUTE p_mint_upsert_mathgoals 193,112277,5,53,93
+EXECUTE p_mint_upsert_mathgoals 194,87099,5,57,99
+EXECUTE p_mint_upsert_mathgoals 195,90617,5,50,100
+EXECUTE p_mint_upsert_mathgoals 196,92249,5,60,90
+EXECUTE p_mint_upsert_mathgoals 197,89471,5,77,90
+EXECUTE p_mint_upsert_mathgoals 198,89768,5,84,97
+EXECUTE p_mint_upsert_mathgoals 199,89115,5,75,90
+EXECUTE p_mint_upsert_mathgoals 200,89457,5,73,91
+EXECUTE p_mint_upsert_mathgoals 201,119576,5,75,96
+EXECUTE p_mint_upsert_mathgoals 202,95324,5,77,93
+EXECUTE p_mint_upsert_mathgoals 203,96541,6,80,94
+EXECUTE p_mint_upsert_mathgoals 204,91814,6,67,96
+EXECUTE p_mint_upsert_mathgoals 205,84065,6,83,94
+EXECUTE p_mint_upsert_mathgoals 206,89316,6,77,87
+EXECUTE p_mint_upsert_mathgoals 207,124995,6,56,93
+EXECUTE p_mint_upsert_mathgoals 208,86548,6,71,91
+EXECUTE p_mint_upsert_mathgoals 209,93253,6,78,98
+EXECUTE p_mint_upsert_mathgoals 210,89138,6,66,82
+EXECUTE p_mint_upsert_mathgoals 211,89607,6,75,85
+EXECUTE p_mint_upsert_mathgoals 212,86670,6,84,88
+EXECUTE p_mint_upsert_mathgoals 213,85995,6,56,92
+EXECUTE p_mint_upsert_mathgoals 214,89765,6,52,80
+EXECUTE p_mint_upsert_mathgoals 215,85551,6,52,86
+EXECUTE p_mint_upsert_mathgoals 216,88549,6,60,95
+EXECUTE p_mint_upsert_mathgoals 217,90661,6,79,90
+EXECUTE p_mint_upsert_mathgoals 218,86591,6,57,92
+EXECUTE p_mint_upsert_mathgoals 219,88387,6,78,87
+EXECUTE p_mint_upsert_mathgoals 220,112638,6,67,92
+EXECUTE p_mint_upsert_mathgoals 221,89728,6,55,94
+EXECUTE p_mint_upsert_mathgoals 222,97097,6,52,91
+EXECUTE p_mint_upsert_mathgoals 223,80852,6,88,91
+EXECUTE p_mint_upsert_mathgoals 224,90198,6,62,84
+EXECUTE p_mint_upsert_mathgoals 225,89974,6,80,90
+EXECUTE p_mint_upsert_mathgoals 226,111269,6,86,89
+EXECUTE p_mint_upsert_mathgoals 227,87473,6,52,89
+EXECUTE p_mint_upsert_mathgoals 228,88504,6,94,97
+EXECUTE p_mint_upsert_mathgoals 229,89702,6,87,95
+EXECUTE p_mint_upsert_mathgoals 230,93956,6,58,80
+EXECUTE p_mint_upsert_mathgoals 231,86692,6,77,83
+EXECUTE p_mint_upsert_mathgoals 232,110503,6,79,91
+EXECUTE p_mint_upsert_mathgoals 233,91733,6,61,94
+EXECUTE p_mint_upsert_mathgoals 234,112277,6,51,97
+EXECUTE p_mint_upsert_mathgoals 235,87099,6,60,84
+EXECUTE p_mint_upsert_mathgoals 236,92249,6,58,98
+EXECUTE p_mint_upsert_mathgoals 237,89471,6,88,97
+EXECUTE p_mint_upsert_mathgoals 238,89768,6,83,84
+EXECUTE p_mint_upsert_mathgoals 239,89115,6,62,82
+EXECUTE p_mint_upsert_mathgoals 240,89457,6,64,87
+EXECUTE p_mint_upsert_mathgoals 241,119576,6,84,91
+EXECUTE p_mint_upsert_mathgoals 242,95324,6,79,83
+set IDENTITY_INSERT goals OFF
+
+--select * from goals
+
+--Adding data to math_assessments
+set IDENTITY_INSERT assessments ON
+EXECUTE p_mint_upsert_assessments 1,112632,1,'10/01/2023',41,'F',6,33
+EXECUTE p_mint_upsert_assessments 2,102102,1,'10/01/2023',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 3,106016,1,'10/01/2023',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 4,96097,1,'10/01/2023',89,'B',16,88
+EXECUTE p_mint_upsert_assessments 5,110215,1,'10/01/2023',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 6,106729,1,'10/01/2023',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 7,117101,1,'10/01/2023',63,'F',9,50
+EXECUTE p_mint_upsert_assessments 8,117725,1,'10/01/2023',63,'F',9,50
+EXECUTE p_mint_upsert_assessments 9,124761,1,'10/01/2023',80,'B',13,72
+EXECUTE p_mint_upsert_assessments 10,103884,1,'10/01/2023',21,'F',3,16
+EXECUTE p_mint_upsert_assessments 11,99494,1,'10/01/2023',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 12,106088,1,'10/01/2023',86,'B',15,83
+EXECUTE p_mint_upsert_assessments 13,98842,1,'10/01/2023',55,'F',8,44
+EXECUTE p_mint_upsert_assessments 14,109302,1,'10/01/2023',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 15,104777,1,'10/01/2023',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 16,104357,1,'10/01/2023',86,'B',15,83
+EXECUTE p_mint_upsert_assessments 17,100954,1,'10/01/2023',78,'C',12,66
+EXECUTE p_mint_upsert_assessments 18,108015,1,'10/01/2023',63,'F',9,50
+EXECUTE p_mint_upsert_assessments 19,102957,1,'10/01/2023',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 20,104809,1,'10/01/2023',73,'C',10,55
+EXECUTE p_mint_upsert_assessments 21,103647,1,'10/01/2023',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 22,100685,1,'10/01/2023',73,'C',10,55
+EXECUTE p_mint_upsert_assessments 23,102110,1,'10/01/2023',95,'A',17,94
+EXECUTE p_mint_upsert_assessments 24,103346,1,'10/01/2023',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 25,100969,1,'10/01/2023',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 26,117552,1,'10/01/2023',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 27,108679,1,'10/01/2023',89,'B',16,88
+EXECUTE p_mint_upsert_assessments 28,111457,1,'10/01/2023',80,'B',13,72
+EXECUTE p_mint_upsert_assessments 29,97294,1,'10/01/2023',49,'F',7,38
+EXECUTE p_mint_upsert_assessments 30,101349,1,'10/01/2023',86,'B',15,83
+EXECUTE p_mint_upsert_assessments 31,99303,1,'10/01/2023',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 32,119445,1,'10/01/2023',0,'F',0,0
+EXECUTE p_mint_upsert_assessments 33,98761,1,'10/01/2023',80,'B',13,72
+EXECUTE p_mint_upsert_assessments 34,99890,1,'10/01/2023',86,'B',15,83
+EXECUTE p_mint_upsert_assessments 35,99936,1,'10/01/2023',49,'F',7,38
+EXECUTE p_mint_upsert_assessments 36,105906,1,'10/01/2023',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 37,97127,1,'10/01/2023',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 38,103985,1,'10/01/2023',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 39,123513,1,'10/01/2023',89,'B',16,88
+EXECUTE p_mint_upsert_assessments 40,104555,1,'10/01/2023',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 41,101965,1,'10/01/2023',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 42,112632,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 43,102102,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 44,106016,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 45,96097,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 46,110215,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 47,106729,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 48,117101,2,'02/16/2024',83,'B',14,77
+EXECUTE p_mint_upsert_assessments 49,117725,2,'02/16/2024',80,'B',13,72
+EXECUTE p_mint_upsert_assessments 50,124761,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 51,103884,2,'02/16/2024',80,'B',13,72
+EXECUTE p_mint_upsert_assessments 52,99494,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 53,106088,2,'02/16/2024',95,'A',17,94
+EXECUTE p_mint_upsert_assessments 54,98842,2,'02/16/2024',95,'A',17,94
+EXECUTE p_mint_upsert_assessments 55,109302,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 56,104777,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 57,104357,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 58,100954,2,'02/16/2024',83,'B',14,77
+EXECUTE p_mint_upsert_assessments 59,108015,2,'02/16/2024',95,'A',17,94
+EXECUTE p_mint_upsert_assessments 60,102957,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 61,104809,2,'02/16/2024',86,'B',15,83
+EXECUTE p_mint_upsert_assessments 62,103647,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 63,100685,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 64,102110,2,'02/16/2024',86,'B',15,83
+EXECUTE p_mint_upsert_assessments 65,103346,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 66,100969,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 67,117552,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 68,108679,2,'02/16/2024',89,'B',16,88
+EXECUTE p_mint_upsert_assessments 69,111457,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 70,97294,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 71,101349,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 72,99303,2,'02/16/2024',86,'B',15,83
+EXECUTE p_mint_upsert_assessments 73,119445,2,'02/16/2024',80,'B',13,72
+EXECUTE p_mint_upsert_assessments 74,98761,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 75,99890,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 76,99936,2,'02/16/2024',80,'B',13,72
+EXECUTE p_mint_upsert_assessments 77,105906,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 78,97127,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 79,103985,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 80,123513,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 81,104555,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 82,101965,2,'02/16/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 83,112632,3,'06/10/2024',95,'A',17,94
+EXECUTE p_mint_upsert_assessments 84,102102,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 85,96097,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 86,110215,3,'06/10/2024',86,'B',15,83
+EXECUTE p_mint_upsert_assessments 87,106729,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 88,117101,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 89,117725,3,'06/10/2024',89,'B',16,88
+EXECUTE p_mint_upsert_assessments 90,124761,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 91,99494,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 92,106088,3,'06/10/2024',89,'B',16,88
+EXECUTE p_mint_upsert_assessments 93,98842,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 94,109302,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 95,104777,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 96,104357,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 97,100954,3,'06/10/2024',89,'B',16,88
+EXECUTE p_mint_upsert_assessments 98,108015,3,'06/10/2024',95,'A',17,94
+EXECUTE p_mint_upsert_assessments 99,102957,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 100,104809,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 101,103647,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 102,100685,3,'06/10/2024',95,'A',17,94
+EXECUTE p_mint_upsert_assessments 103,102110,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 104,103346,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 105,117552,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 106,108679,3,'06/10/2024',83,'B',14,77
+EXECUTE p_mint_upsert_assessments 107,111457,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 108,97294,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 109,101349,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 110,99303,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 111,119445,3,'06/10/2024',80,'B',13,72
+EXECUTE p_mint_upsert_assessments 112,98761,3,'06/10/2024',95,'A',17,94
+EXECUTE p_mint_upsert_assessments 113,99890,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 114,99936,3,'06/10/2024',89,'B',16,88
+EXECUTE p_mint_upsert_assessments 115,105906,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 116,97127,3,'06/10/2024',95,'A',17,94
+EXECUTE p_mint_upsert_assessments 117,103985,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 118,123513,3,'06/10/2024',95,'A',17,94
+EXECUTE p_mint_upsert_assessments 119,104555,3,'06/10/2024',100,'A',18,100
+EXECUTE p_mint_upsert_assessments 120,101965,3,'06/10/2024',95,'A',17,94
+EXECUTE p_mint_upsert_assessments 121,96541,4,'10/01/2023',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 122,91814,4,'10/01/2023',75,'C',18,66
+EXECUTE p_mint_upsert_assessments 123,84065,4,'10/01/2023',88,'B',21,77
+EXECUTE p_mint_upsert_assessments 124,89316,4,'10/01/2023',100,'A',24,88
+EXECUTE p_mint_upsert_assessments 125,124995,4,'10/01/2023',67,'F',16,59
+EXECUTE p_mint_upsert_assessments 126,86548,4,'10/01/2023',100,'A',24,88
+EXECUTE p_mint_upsert_assessments 127,93253,4,'10/01/2023',58,'F',14,51
+EXECUTE p_mint_upsert_assessments 128,89138,4,'10/01/2023',96,'A',23,85
+EXECUTE p_mint_upsert_assessments 129,89607,4,'10/01/2023',92,'A',22,81
+EXECUTE p_mint_upsert_assessments 130,86670,4,'10/01/2023',46,'F',11,40
+EXECUTE p_mint_upsert_assessments 131,85995,4,'10/01/2023',92,'A',22,81
+EXECUTE p_mint_upsert_assessments 132,89765,4,'10/01/2023',104,'A',26,96
+EXECUTE p_mint_upsert_assessments 133,85551,4,'10/01/2023',84,'B',20,74
+EXECUTE p_mint_upsert_assessments 134,88549,4,'10/01/2023',96,'A',23,85
+EXECUTE p_mint_upsert_assessments 135,90661,4,'10/01/2023',42,'F',10,37
+EXECUTE p_mint_upsert_assessments 136,86591,4,'10/01/2023',84,'B',20,74
+EXECUTE p_mint_upsert_assessments 137,88387,4,'10/01/2023',46,'F',11,40
+EXECUTE p_mint_upsert_assessments 138,112638,4,'10/01/2023',88,'B',21,77
+EXECUTE p_mint_upsert_assessments 139,89728,4,'10/01/2023',0,'F',0,0
+EXECUTE p_mint_upsert_assessments 140,97097,4,'10/01/2023',79,'C',19,70
+EXECUTE p_mint_upsert_assessments 141,80852,4,'10/01/2023',84,'B',20,74
+EXECUTE p_mint_upsert_assessments 142,90198,4,'10/01/2023',88,'B',21,77
+EXECUTE p_mint_upsert_assessments 143,89974,4,'10/01/2023',79,'C',19,70
+EXECUTE p_mint_upsert_assessments 144,111269,4,'10/01/2023',96,'A',23,85
+EXECUTE p_mint_upsert_assessments 145,87473,4,'10/01/2023',8,'F',2,7
+EXECUTE p_mint_upsert_assessments 146,88504,4,'10/01/2023',79,'C',19,70
+EXECUTE p_mint_upsert_assessments 147,89702,4,'10/01/2023',88,'B',21,77
+EXECUTE p_mint_upsert_assessments 148,93956,4,'10/01/2023',17,'F',4,14
+EXECUTE p_mint_upsert_assessments 149,86692,4,'10/01/2023',54,'F',13,48
+EXECUTE p_mint_upsert_assessments 150,110503,4,'10/01/2023',84,'B',20,74
+EXECUTE p_mint_upsert_assessments 151,91733,4,'10/01/2023',38,'F',9,33
+EXECUTE p_mint_upsert_assessments 152,112277,4,'10/01/2023',58,'F',14,51
+EXECUTE p_mint_upsert_assessments 153,87099,4,'10/01/2023',88,'B',21,77
+EXECUTE p_mint_upsert_assessments 154,90617,4,'10/01/2023',102,'A',25,92
+EXECUTE p_mint_upsert_assessments 155,92249,4,'10/01/2023',88,'B',21,77
+EXECUTE p_mint_upsert_assessments 156,89471,4,'10/01/2023',71,'C',17,63
+EXECUTE p_mint_upsert_assessments 157,89768,4,'10/01/2023',88,'B',21,77
+EXECUTE p_mint_upsert_assessments 158,89115,4,'10/01/2023',84,'B',20,74
+EXECUTE p_mint_upsert_assessments 159,89457,4,'10/01/2023',79,'C',19,70
+EXECUTE p_mint_upsert_assessments 160,119576,4,'10/01/2023',67,'F',16,59
+EXECUTE p_mint_upsert_assessments 161,95324,4,'10/01/2023',29,'F',7,25
+EXECUTE p_mint_upsert_assessments 162,96541,5,'02/16/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 163,91814,5,'02/16/2024',75,'C',18,66
+EXECUTE p_mint_upsert_assessments 164,84065,5,'02/16/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 165,89316,5,'02/16/2024',100,'A',24,88
+EXECUTE p_mint_upsert_assessments 166,124995,5,'02/16/2024',100,'A',24,88
+EXECUTE p_mint_upsert_assessments 167,86548,5,'02/16/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 168,93253,5,'02/16/2024',100,'A',24,88
+EXECUTE p_mint_upsert_assessments 169,89138,5,'02/16/2024',88,'B',21,77
+EXECUTE p_mint_upsert_assessments 170,89607,5,'02/16/2024',104,'A',26,96
+EXECUTE p_mint_upsert_assessments 171,86670,5,'02/16/2024',75,'C',18,66
+EXECUTE p_mint_upsert_assessments 172,85995,5,'02/16/2024',50,'F',12,44
+EXECUTE p_mint_upsert_assessments 173,89765,5,'02/16/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 174,85551,5,'02/16/2024',100,'A',24,88
+EXECUTE p_mint_upsert_assessments 175,88549,5,'02/16/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 176,90661,5,'02/16/2024',104,'A',26,96
+EXECUTE p_mint_upsert_assessments 177,86591,5,'02/16/2024',104,'A',26,96
+EXECUTE p_mint_upsert_assessments 178,88387,5,'02/16/2024',88,'B',21,77
+EXECUTE p_mint_upsert_assessments 179,112638,5,'02/16/2024',88,'B',21,77
+EXECUTE p_mint_upsert_assessments 180,89728,5,'02/16/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 181,97097,5,'02/16/2024',104,'A',26,96
+EXECUTE p_mint_upsert_assessments 182,80852,5,'02/16/2024',104,'A',26,96
+EXECUTE p_mint_upsert_assessments 183,90198,5,'02/16/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 184,89974,5,'02/16/2024',100,'A',24,88
+EXECUTE p_mint_upsert_assessments 185,111269,5,'02/16/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 186,87473,5,'02/16/2024',63,'F',15,55
+EXECUTE p_mint_upsert_assessments 187,88504,5,'02/16/2024',88,'B',21,77
+EXECUTE p_mint_upsert_assessments 188,89702,5,'02/16/2024',100,'A',24,88
+EXECUTE p_mint_upsert_assessments 189,93956,5,'02/16/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 190,86692,5,'02/16/2024',96,'A',23,85
+EXECUTE p_mint_upsert_assessments 191,110503,5,'02/16/2024',102,'A',25,92
+EXECUTE p_mint_upsert_assessments 192,91733,5,'02/16/2024',104,'A',26,96
+EXECUTE p_mint_upsert_assessments 193,112277,5,'02/16/2024',104,'A',26,96
+EXECUTE p_mint_upsert_assessments 194,87099,5,'02/16/2024',100,'A',24,88
+EXECUTE p_mint_upsert_assessments 195,90617,5,'02/16/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 196,92249,5,'02/16/2024',100,'A',24,88
+EXECUTE p_mint_upsert_assessments 197,89471,5,'02/16/2024',96,'A',23,85
+EXECUTE p_mint_upsert_assessments 198,89768,5,'02/16/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 199,89115,5,'02/16/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 200,89457,5,'02/16/2024',100,'A',24,88
+EXECUTE p_mint_upsert_assessments 201,119576,5,'02/16/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 202,95324,5,'02/16/2024',92,'A',22,81
+EXECUTE p_mint_upsert_assessments 203,96541,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 204,91814,6,'06/10/2024',104,'A',26,96
+EXECUTE p_mint_upsert_assessments 205,84065,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 206,89316,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 207,124995,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 208,86548,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 209,93253,6,'06/10/2024',104,'A',26,96
+EXECUTE p_mint_upsert_assessments 210,89138,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 211,89607,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 212,86670,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 213,85995,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 214,89765,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 215,85551,6,'06/10/2024',104,'A',26,96
+EXECUTE p_mint_upsert_assessments 216,88549,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 217,90661,6,'06/10/2024',104,'A',26,96
+EXECUTE p_mint_upsert_assessments 218,86591,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 219,88387,6,'06/10/2024',92,'A',22,81
+EXECUTE p_mint_upsert_assessments 220,112638,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 221,89728,6,'06/10/2024',92,'A',22,81
+EXECUTE p_mint_upsert_assessments 222,97097,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 223,80852,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 224,90198,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 225,89974,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 226,111269,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 227,87473,6,'06/10/2024',102,'A',25,92
+EXECUTE p_mint_upsert_assessments 228,88504,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 229,89702,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 230,93956,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 231,86692,6,'06/10/2024',102,'A',25,92
+EXECUTE p_mint_upsert_assessments 232,110503,6,'06/10/2024',102,'A',25,92
+EXECUTE p_mint_upsert_assessments 233,91733,6,'06/10/2024',100,'A',24,88
+EXECUTE p_mint_upsert_assessments 234,112277,6,'06/10/2024',104,'A',26,96
+EXECUTE p_mint_upsert_assessments 235,87099,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 236,92249,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 237,89471,6,'06/10/2024',102,'A',25,92
+EXECUTE p_mint_upsert_assessments 238,89768,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 239,89115,6,'06/10/2024',102,'A',25,92
+EXECUTE p_mint_upsert_assessments 240,89457,6,'06/10/2024',104,'A',26,96
+EXECUTE p_mint_upsert_assessments 241,119576,6,'06/10/2024',106,'A',27,100
+EXECUTE p_mint_upsert_assessments 242,95324,6,'06/10/2024',88,'B',21,77
+set IDENTITY_INSERT assessments OFF
+
+--select * from assessments
+
+--adding data to practice logs
+set IDENTITY_INSERT practice_logs ON
+EXECUTE p_mint_upsert_practicelogs 1,112632,1,'09/19/2023','12:14:00','12:30:06',43
+EXECUTE p_mint_upsert_practicelogs 2,102102,1,'09/27/2023','09:26:00','09:39:16',99
+EXECUTE p_mint_upsert_practicelogs 3,106016,1,'09/19/2023','08:22:00','08:43:37',63
+EXECUTE p_mint_upsert_practicelogs 4,96097,1,'09/12/2023','14:43:00','15:12:01',97
+EXECUTE p_mint_upsert_practicelogs 5,110215,1,'09/29/2023','11:20:00','11:26:02',68
+EXECUTE p_mint_upsert_practicelogs 6,106729,1,'09/13/2023','12:25:00','12:25:39',65
+EXECUTE p_mint_upsert_practicelogs 7,117101,1,'09/29/2023','15:37:00','16:01:07',76
+EXECUTE p_mint_upsert_practicelogs 8,117725,1,'09/27/2023','15:13:00','15:41:55',83
+EXECUTE p_mint_upsert_practicelogs 9,124761,1,'09/29/2023','10:52:00','10:55:15',38
+EXECUTE p_mint_upsert_practicelogs 10,103884,1,'09/18/2023','14:06:00','14:19:25',75
+EXECUTE p_mint_upsert_practicelogs 11,99494,1,'09/11/2023','11:23:00','11:48:23',60
+EXECUTE p_mint_upsert_practicelogs 12,106088,1,'09/19/2023','10:33:00','10:42:08',82
+EXECUTE p_mint_upsert_practicelogs 13,98842,1,'09/27/2023','12:25:00','12:43:33',63
+EXECUTE p_mint_upsert_practicelogs 14,109302,1,'09/25/2023','13:12:00','13:25:51',35
+EXECUTE p_mint_upsert_practicelogs 15,104777,1,'09/18/2023','08:13:00','08:32:48',96
+EXECUTE p_mint_upsert_practicelogs 16,104357,1,'09/16/2023','15:22:00','15:24:25',67
+EXECUTE p_mint_upsert_practicelogs 17,100954,1,'09/28/2023','13:19:00','13:41:50',41
+EXECUTE p_mint_upsert_practicelogs 18,108015,1,'09/12/2023','13:26:00','13:41:04',74
+EXECUTE p_mint_upsert_practicelogs 19,102957,1,'09/19/2023','08:33:00','08:40:22',68
+EXECUTE p_mint_upsert_practicelogs 20,104809,1,'09/19/2023','13:46:00','14:03:54',63
+EXECUTE p_mint_upsert_practicelogs 21,103647,1,'09/25/2023','10:01:00','10:25:48',96
+EXECUTE p_mint_upsert_practicelogs 22,100685,1,'09/16/2023','15:15:00','15:29:48',98
+EXECUTE p_mint_upsert_practicelogs 23,102110,1,'09/25/2023','09:39:00','09:41:20',89
+EXECUTE p_mint_upsert_practicelogs 24,103346,1,'09/27/2023','10:33:00','10:51:36',79
+EXECUTE p_mint_upsert_practicelogs 25,100969,1,'09/20/2023','13:39:00','13:43:40',89
+EXECUTE p_mint_upsert_practicelogs 26,117552,1,'09/27/2023','14:53:00','14:58:25',82
+EXECUTE p_mint_upsert_practicelogs 27,108679,1,'09/17/2023','15:26:00','15:31:24',49
+EXECUTE p_mint_upsert_practicelogs 28,111457,1,'09/27/2023','08:29:00','08:47:01',49
+EXECUTE p_mint_upsert_practicelogs 29,97294,1,'09/16/2023','13:35:00','13:51:31',43
+EXECUTE p_mint_upsert_practicelogs 30,101349,1,'09/29/2023','11:28:00','11:47:17',65
+EXECUTE p_mint_upsert_practicelogs 31,99303,1,'09/24/2023','11:56:00','12:04:12',96
+EXECUTE p_mint_upsert_practicelogs 32,119445,1,'09/16/2023','09:23:00','09:42:54',85
+EXECUTE p_mint_upsert_practicelogs 33,98761,1,'09/23/2023','08:32:00','08:52:39',79
+EXECUTE p_mint_upsert_practicelogs 34,99890,1,'09/21/2023','13:15:00','13:25:24',55
+EXECUTE p_mint_upsert_practicelogs 35,99936,1,'09/20/2023','10:55:00','11:12:43',76
+EXECUTE p_mint_upsert_practicelogs 36,105906,1,'09/25/2023','11:09:00','11:15:45',80
+EXECUTE p_mint_upsert_practicelogs 37,97127,1,'09/28/2023','10:35:00','10:35:55',44
+EXECUTE p_mint_upsert_practicelogs 38,103985,1,'09/21/2023','14:28:00','14:29:02',50
+EXECUTE p_mint_upsert_practicelogs 39,123513,1,'09/18/2023','08:06:00','08:17:36',95
+EXECUTE p_mint_upsert_practicelogs 40,104555,1,'09/27/2023','15:47:00','16:12:33',41
+EXECUTE p_mint_upsert_practicelogs 41,101965,1,'09/17/2023','13:53:00','14:05:46',53
+EXECUTE p_mint_upsert_practicelogs 42,112632,2,'01/31/2024','08:20:00','08:33:25',70
+EXECUTE p_mint_upsert_practicelogs 43,102102,2,'02/01/2024','12:25:00','12:50:37',69
+EXECUTE p_mint_upsert_practicelogs 44,106016,2,'02/08/2024','09:56:00','10:17:23',56
+EXECUTE p_mint_upsert_practicelogs 45,96097,2,'02/14/2024','12:19:00','12:36:03',85
+EXECUTE p_mint_upsert_practicelogs 46,110215,2,'02/11/2024','11:02:00','11:29:31',95
+EXECUTE p_mint_upsert_practicelogs 47,106729,2,'02/13/2024','09:47:00','10:07:53',83
+EXECUTE p_mint_upsert_practicelogs 48,117101,2,'02/05/2024','15:10:00','15:14:10',70
+EXECUTE p_mint_upsert_practicelogs 49,117725,2,'02/14/2024','12:14:00','12:28:28',60
+EXECUTE p_mint_upsert_practicelogs 50,124761,2,'02/03/2024','10:45:00','11:02:26',75
+EXECUTE p_mint_upsert_practicelogs 51,103884,2,'01/29/2024','13:19:00','13:36:06',65
+EXECUTE p_mint_upsert_practicelogs 52,99494,2,'01/27/2024','08:34:00','08:57:26',48
+EXECUTE p_mint_upsert_practicelogs 53,106088,2,'02/14/2024','10:04:00','10:30:02',40
+EXECUTE p_mint_upsert_practicelogs 54,98842,2,'02/01/2024','14:50:00','14:59:27',36
+EXECUTE p_mint_upsert_practicelogs 55,109302,2,'02/02/2024','09:50:00','10:06:23',85
+EXECUTE p_mint_upsert_practicelogs 56,104777,2,'02/04/2024','12:37:00','12:56:29',62
+EXECUTE p_mint_upsert_practicelogs 57,104357,2,'02/10/2024','11:14:00','11:21:22',71
+EXECUTE p_mint_upsert_practicelogs 58,100954,2,'02/02/2024','12:05:00','12:32:00',66
+EXECUTE p_mint_upsert_practicelogs 59,108015,2,'02/07/2024','12:37:00','12:45:43',76
+EXECUTE p_mint_upsert_practicelogs 60,102957,2,'02/03/2024','09:06:00','09:31:28',36
+EXECUTE p_mint_upsert_practicelogs 61,104809,2,'02/02/2024','14:23:00','14:29:29',66
+EXECUTE p_mint_upsert_practicelogs 62,103647,2,'01/31/2024','15:54:00','16:20:32',71
+EXECUTE p_mint_upsert_practicelogs 63,100685,2,'01/26/2024','09:28:00','09:36:30',97
+EXECUTE p_mint_upsert_practicelogs 64,102110,2,'01/30/2024','12:19:00','12:29:40',96
+EXECUTE p_mint_upsert_practicelogs 65,103346,2,'02/11/2024','15:00:00','15:11:57',56
+EXECUTE p_mint_upsert_practicelogs 66,100969,2,'01/28/2024','09:46:00','09:57:15',57
+EXECUTE p_mint_upsert_practicelogs 67,117552,2,'01/31/2024','15:10:00','15:31:48',90
+EXECUTE p_mint_upsert_practicelogs 68,108679,2,'02/06/2024','13:06:00','13:29:23',69
+EXECUTE p_mint_upsert_practicelogs 69,111457,2,'02/12/2024','08:48:00','08:59:51',61
+EXECUTE p_mint_upsert_practicelogs 70,97294,2,'02/13/2024','13:32:00','13:34:52',75
+EXECUTE p_mint_upsert_practicelogs 71,101349,2,'02/10/2024','13:07:00','13:36:29',86
+EXECUTE p_mint_upsert_practicelogs 72,99303,2,'01/27/2024','12:31:00','12:44:11',62
+EXECUTE p_mint_upsert_practicelogs 73,119445,2,'01/31/2024','08:39:00','09:01:02',99
+EXECUTE p_mint_upsert_practicelogs 74,98761,2,'02/06/2024','12:39:00','12:41:07',74
+EXECUTE p_mint_upsert_practicelogs 75,99890,2,'02/08/2024','08:49:00','09:01:50',46
+EXECUTE p_mint_upsert_practicelogs 76,99936,2,'01/27/2024','12:59:00','13:08:55',72
+EXECUTE p_mint_upsert_practicelogs 77,105906,2,'02/10/2024','12:50:00','13:01:17',91
+EXECUTE p_mint_upsert_practicelogs 78,97127,2,'02/08/2024','08:24:00','08:51:35',97
+EXECUTE p_mint_upsert_practicelogs 79,103985,2,'02/03/2024','11:48:00','12:04:45',55
+EXECUTE p_mint_upsert_practicelogs 80,123513,2,'01/29/2024','09:46:00','09:58:34',72
+EXECUTE p_mint_upsert_practicelogs 81,104555,2,'01/30/2024','08:33:00','08:45:42',72
+EXECUTE p_mint_upsert_practicelogs 82,101965,2,'02/09/2024','14:24:00','14:38:51',63
+EXECUTE p_mint_upsert_practicelogs 83,112632,3,'05/26/2024','15:45:00','16:10:22',86
+EXECUTE p_mint_upsert_practicelogs 84,102102,3,'05/23/2024','11:11:00','11:19:45',54
+EXECUTE p_mint_upsert_practicelogs 85,96097,3,'05/29/2024','12:32:00','12:52:20',58
+EXECUTE p_mint_upsert_practicelogs 86,110215,3,'05/24/2024','15:30:00','15:54:45',77
+EXECUTE p_mint_upsert_practicelogs 87,106729,3,'05/28/2024','09:34:00','09:40:27',35
+EXECUTE p_mint_upsert_practicelogs 88,117101,3,'06/06/2024','15:02:00','15:03:06',50
+EXECUTE p_mint_upsert_practicelogs 89,117725,3,'05/22/2024','14:50:00','14:56:31',83
+EXECUTE p_mint_upsert_practicelogs 90,124761,3,'06/03/2024','14:17:00','14:32:55',46
+EXECUTE p_mint_upsert_practicelogs 91,99494,3,'05/21/2024','08:31:00','09:00:44',93
+EXECUTE p_mint_upsert_practicelogs 92,106088,3,'05/25/2024','14:33:00','14:36:18',75
+EXECUTE p_mint_upsert_practicelogs 93,98842,3,'05/23/2024','13:23:00','13:52:43',90
+EXECUTE p_mint_upsert_practicelogs 94,109302,3,'05/24/2024','15:34:00','15:50:15',40
+EXECUTE p_mint_upsert_practicelogs 95,104777,3,'05/27/2024','09:10:00','09:25:12',57
+EXECUTE p_mint_upsert_practicelogs 96,104357,3,'06/04/2024','14:00:00','14:09:48',93
+EXECUTE p_mint_upsert_practicelogs 97,100954,3,'06/04/2024','14:00:00','14:09:52',44
+EXECUTE p_mint_upsert_practicelogs 98,108015,3,'06/04/2024','11:48:00','12:07:01',49
+EXECUTE p_mint_upsert_practicelogs 99,102957,3,'05/31/2024','11:41:00','11:44:41',86
+EXECUTE p_mint_upsert_practicelogs 100,104809,3,'05/28/2024','15:00:00','15:07:06',74
+EXECUTE p_mint_upsert_practicelogs 101,103647,3,'05/22/2024','12:18:00','12:23:04',56
+EXECUTE p_mint_upsert_practicelogs 102,100685,3,'06/06/2024','14:50:00','14:52:44',66
+EXECUTE p_mint_upsert_practicelogs 103,102110,3,'05/27/2024','12:51:00','13:12:20',47
+EXECUTE p_mint_upsert_practicelogs 104,103346,3,'06/02/2024','11:16:00','11:30:27',41
+EXECUTE p_mint_upsert_practicelogs 105,117552,3,'05/24/2024','10:12:00','10:14:04',96
+EXECUTE p_mint_upsert_practicelogs 106,108679,3,'05/27/2024','14:35:00','14:47:25',44
+EXECUTE p_mint_upsert_practicelogs 107,111457,3,'05/24/2024','14:10:00','14:20:37',96
+EXECUTE p_mint_upsert_practicelogs 108,97294,3,'05/23/2024','09:10:00','09:28:28',64
+EXECUTE p_mint_upsert_practicelogs 109,101349,3,'05/20/2024','12:19:00','12:47:04',96
+EXECUTE p_mint_upsert_practicelogs 110,99303,3,'06/04/2024','09:28:00','09:45:05',51
+EXECUTE p_mint_upsert_practicelogs 111,119445,3,'06/04/2024','11:16:00','11:31:58',89
+EXECUTE p_mint_upsert_practicelogs 112,98761,3,'05/31/2024','14:34:00','14:58:04',65
+EXECUTE p_mint_upsert_practicelogs 113,99890,3,'06/05/2024','12:35:00','12:39:14',35
+EXECUTE p_mint_upsert_practicelogs 114,99936,3,'06/02/2024','10:31:00','10:33:05',88
+EXECUTE p_mint_upsert_practicelogs 115,105906,3,'05/30/2024','11:53:00','12:00:11',47
+EXECUTE p_mint_upsert_practicelogs 116,97127,3,'05/28/2024','09:33:00','09:56:23',88
+EXECUTE p_mint_upsert_practicelogs 117,103985,3,'05/30/2024','13:44:00','13:45:42',40
+EXECUTE p_mint_upsert_practicelogs 118,123513,3,'05/31/2024','11:57:00','12:24:02',38
+EXECUTE p_mint_upsert_practicelogs 119,104555,3,'06/02/2024','10:37:00','10:43:22',39
+EXECUTE p_mint_upsert_practicelogs 120,101965,3,'06/03/2024','11:43:00','12:09:53',86
+EXECUTE p_mint_upsert_practicelogs 121,96541,4,'09/26/2023','10:02:00','10:12:21',66
+EXECUTE p_mint_upsert_practicelogs 122,91814,4,'09/25/2023','12:03:00','12:15:56',46
+EXECUTE p_mint_upsert_practicelogs 123,84065,4,'09/10/2023','10:46:00','11:03:16',79
+EXECUTE p_mint_upsert_practicelogs 124,89316,4,'09/14/2023','15:58:00','15:58:40',62
+EXECUTE p_mint_upsert_practicelogs 125,124995,4,'09/15/2023','08:49:00','08:54:53',83
+EXECUTE p_mint_upsert_practicelogs 126,86548,4,'09/16/2023','12:06:00','12:30:50',99
+EXECUTE p_mint_upsert_practicelogs 127,93253,4,'09/25/2023','11:16:00','11:34:22',44
+EXECUTE p_mint_upsert_practicelogs 128,89138,4,'09/10/2023','11:30:00','11:48:18',94
+EXECUTE p_mint_upsert_practicelogs 129,89607,4,'09/27/2023','12:19:00','12:22:22',82
+EXECUTE p_mint_upsert_practicelogs 130,86670,4,'09/14/2023','13:01:00','13:03:01',41
+EXECUTE p_mint_upsert_practicelogs 131,85995,4,'09/11/2023','11:05:00','11:34:25',35
+EXECUTE p_mint_upsert_practicelogs 132,89765,4,'09/17/2023','11:56:00','12:11:23',69
+EXECUTE p_mint_upsert_practicelogs 133,85551,4,'09/19/2023','12:54:00','13:00:08',78
+EXECUTE p_mint_upsert_practicelogs 134,88549,4,'09/14/2023','09:49:00','10:13:31',36
+EXECUTE p_mint_upsert_practicelogs 135,90661,4,'09/26/2023','09:28:00','09:29:32',83
+EXECUTE p_mint_upsert_practicelogs 136,86591,4,'09/17/2023','11:51:00','12:15:28',100
+EXECUTE p_mint_upsert_practicelogs 137,88387,4,'09/21/2023','11:27:00','11:44:40',91
+EXECUTE p_mint_upsert_practicelogs 138,112638,4,'09/24/2023','13:44:00','13:57:15',81
+EXECUTE p_mint_upsert_practicelogs 139,89728,4,'09/14/2023','15:28:00','15:57:35',57
+EXECUTE p_mint_upsert_practicelogs 140,97097,4,'09/18/2023','09:30:00','09:31:47',49
+EXECUTE p_mint_upsert_practicelogs 141,80852,4,'09/27/2023','13:58:00','14:03:32',54
+EXECUTE p_mint_upsert_practicelogs 142,90198,4,'09/26/2023','09:28:00','09:33:34',47
+EXECUTE p_mint_upsert_practicelogs 143,89974,4,'09/21/2023','14:41:00','14:46:20',55
+EXECUTE p_mint_upsert_practicelogs 144,111269,4,'09/14/2023','13:15:00','13:20:11',44
+EXECUTE p_mint_upsert_practicelogs 145,87473,4,'09/16/2023','14:36:00','14:39:41',80
+EXECUTE p_mint_upsert_practicelogs 146,88504,4,'09/27/2023','15:57:00','16:11:47',45
+EXECUTE p_mint_upsert_practicelogs 147,89702,4,'09/24/2023','09:03:00','09:26:58',82
+EXECUTE p_mint_upsert_practicelogs 148,93956,4,'09/19/2023','11:23:00','11:32:04',77
+EXECUTE p_mint_upsert_practicelogs 149,86692,4,'09/10/2023','09:55:00','10:01:54',79
+EXECUTE p_mint_upsert_practicelogs 150,110503,4,'09/20/2023','13:36:00','13:40:50',35
+EXECUTE p_mint_upsert_practicelogs 151,91733,4,'09/19/2023','10:23:00','10:35:42',62
+EXECUTE p_mint_upsert_practicelogs 152,112277,4,'09/26/2023','15:52:00','15:52:58',75
+EXECUTE p_mint_upsert_practicelogs 153,87099,4,'09/14/2023','15:19:00','15:45:44',45
+EXECUTE p_mint_upsert_practicelogs 154,90617,4,'09/22/2023','08:27:00','08:30:31',99
+EXECUTE p_mint_upsert_practicelogs 155,92249,4,'09/19/2023','15:29:00','15:57:35',74
+EXECUTE p_mint_upsert_practicelogs 156,89471,4,'09/10/2023','08:28:00','08:32:40',81
+EXECUTE p_mint_upsert_practicelogs 157,89768,4,'09/11/2023','11:46:00','11:56:51',65
+EXECUTE p_mint_upsert_practicelogs 158,89115,4,'09/26/2023','09:57:00','10:05:16',52
+EXECUTE p_mint_upsert_practicelogs 159,89457,4,'09/26/2023','09:00:00','09:21:45',99
+EXECUTE p_mint_upsert_practicelogs 160,119576,4,'09/15/2023','13:50:00','14:06:40',46
+EXECUTE p_mint_upsert_practicelogs 161,95324,4,'09/26/2023','10:32:00','10:42:38',67
+EXECUTE p_mint_upsert_practicelogs 162,96541,5,'02/09/2024','09:30:00','09:43:32',71
+EXECUTE p_mint_upsert_practicelogs 163,91814,5,'02/11/2024','13:39:00','14:01:22',61
+EXECUTE p_mint_upsert_practicelogs 164,84065,5,'02/11/2024','12:43:00','12:51:29',62
+EXECUTE p_mint_upsert_practicelogs 165,89316,5,'02/02/2024','10:42:00','11:07:52',40
+EXECUTE p_mint_upsert_practicelogs 166,124995,5,'02/09/2024','13:06:00','13:07:11',91
+EXECUTE p_mint_upsert_practicelogs 167,86548,5,'02/02/2024','09:29:00','09:33:29',36
+EXECUTE p_mint_upsert_practicelogs 168,93253,5,'02/14/2024','11:46:00','11:49:38',98
+EXECUTE p_mint_upsert_practicelogs 169,89138,5,'02/13/2024','13:33:00','13:56:19',80
+EXECUTE p_mint_upsert_practicelogs 170,89607,5,'02/11/2024','14:11:00','14:16:10',74
+EXECUTE p_mint_upsert_practicelogs 171,86670,5,'02/04/2024','10:59:00','11:07:31',40
+EXECUTE p_mint_upsert_practicelogs 172,85995,5,'02/08/2024','14:24:00','14:45:54',77
+EXECUTE p_mint_upsert_practicelogs 173,89765,5,'02/14/2024','13:41:00','13:57:52',65
+EXECUTE p_mint_upsert_practicelogs 174,85551,5,'02/08/2024','08:43:00','08:52:00',65
+EXECUTE p_mint_upsert_practicelogs 175,88549,5,'02/14/2024','14:18:00','14:23:15',37
+EXECUTE p_mint_upsert_practicelogs 176,90661,5,'01/29/2024','13:53:00','14:07:40',37
+EXECUTE p_mint_upsert_practicelogs 177,86591,5,'02/13/2024','14:14:00','14:28:50',78
+EXECUTE p_mint_upsert_practicelogs 178,88387,5,'02/08/2024','09:09:00','09:33:04',53
+EXECUTE p_mint_upsert_practicelogs 179,112638,5,'02/14/2024','09:18:00','09:24:46',58
+EXECUTE p_mint_upsert_practicelogs 180,89728,5,'02/07/2024','13:48:00','14:04:16',53
+EXECUTE p_mint_upsert_practicelogs 181,97097,5,'02/09/2024','14:56:00','15:14:15',70
+EXECUTE p_mint_upsert_practicelogs 182,80852,5,'02/06/2024','12:07:00','12:36:41',98
+EXECUTE p_mint_upsert_practicelogs 183,90198,5,'02/13/2024','12:27:00','12:30:07',89
+EXECUTE p_mint_upsert_practicelogs 184,89974,5,'02/13/2024','10:32:00','11:01:36',88
+EXECUTE p_mint_upsert_practicelogs 185,111269,5,'02/01/2024','13:05:00','13:20:50',72
+EXECUTE p_mint_upsert_practicelogs 186,87473,5,'02/02/2024','12:21:00','12:34:48',85
+EXECUTE p_mint_upsert_practicelogs 187,88504,5,'02/04/2024','12:12:00','12:18:52',92
+EXECUTE p_mint_upsert_practicelogs 188,89702,5,'02/02/2024','14:54:00','15:01:39',63
+EXECUTE p_mint_upsert_practicelogs 189,93956,5,'02/11/2024','10:41:00','10:47:56',58
+EXECUTE p_mint_upsert_practicelogs 190,86692,5,'02/11/2024','13:03:00','13:04:13',36
+EXECUTE p_mint_upsert_practicelogs 191,110503,5,'02/14/2024','10:12:00','10:28:46',52
+EXECUTE p_mint_upsert_practicelogs 192,91733,5,'01/27/2024','14:40:00','15:05:57',82
+EXECUTE p_mint_upsert_practicelogs 193,112277,5,'02/12/2024','08:06:00','08:30:35',85
+EXECUTE p_mint_upsert_practicelogs 194,87099,5,'02/10/2024','15:40:00','15:50:44',69
+EXECUTE p_mint_upsert_practicelogs 195,90617,5,'01/31/2024','12:39:00','12:50:41',82
+EXECUTE p_mint_upsert_practicelogs 196,92249,5,'02/10/2024','15:36:00','15:39:20',41
+EXECUTE p_mint_upsert_practicelogs 197,89471,5,'01/28/2024','11:10:00','11:11:41',60
+EXECUTE p_mint_upsert_practicelogs 198,89768,5,'01/30/2024','13:28:00','13:36:32',74
+EXECUTE p_mint_upsert_practicelogs 199,89115,5,'02/09/2024','14:25:00','14:54:38',84
+EXECUTE p_mint_upsert_practicelogs 200,89457,5,'01/31/2024','10:09:00','10:32:16',41
+EXECUTE p_mint_upsert_practicelogs 201,119576,5,'02/07/2024','13:26:00','13:29:23',91
+EXECUTE p_mint_upsert_practicelogs 202,95324,5,'02/08/2024','14:04:00','14:29:34',42
+EXECUTE p_mint_upsert_practicelogs 203,96541,6,'05/23/2024','10:45:00','10:54:29',42
+EXECUTE p_mint_upsert_practicelogs 204,91814,6,'05/27/2024','13:18:00','13:30:26',71
+EXECUTE p_mint_upsert_practicelogs 205,84065,6,'05/31/2024','10:40:00','10:46:43',97
+EXECUTE p_mint_upsert_practicelogs 206,89316,6,'05/26/2024','14:31:00','14:32:10',37
+EXECUTE p_mint_upsert_practicelogs 207,124995,6,'05/23/2024','11:21:00','11:37:14',86
+EXECUTE p_mint_upsert_practicelogs 208,86548,6,'05/25/2024','13:59:00','14:11:59',56
+EXECUTE p_mint_upsert_practicelogs 209,93253,6,'05/20/2024','14:35:00','14:53:25',64
+EXECUTE p_mint_upsert_practicelogs 210,89138,6,'06/01/2024','15:53:00','16:11:43',90
+EXECUTE p_mint_upsert_practicelogs 211,89607,6,'06/01/2024','15:01:00','15:23:17',80
+EXECUTE p_mint_upsert_practicelogs 212,86670,6,'06/05/2024','09:05:00','09:07:58',62
+EXECUTE p_mint_upsert_practicelogs 213,85995,6,'05/27/2024','08:50:00','09:02:28',35
+EXECUTE p_mint_upsert_practicelogs 214,89765,6,'05/27/2024','11:42:00','12:02:22',100
+EXECUTE p_mint_upsert_practicelogs 215,85551,6,'06/04/2024','08:14:00','08:31:21',86
+EXECUTE p_mint_upsert_practicelogs 216,88549,6,'06/07/2024','10:41:00','10:52:55',86
+EXECUTE p_mint_upsert_practicelogs 217,90661,6,'06/06/2024','08:56:00','09:12:06',53
+EXECUTE p_mint_upsert_practicelogs 218,86591,6,'05/25/2024','13:22:00','13:49:35',69
+EXECUTE p_mint_upsert_practicelogs 219,88387,6,'05/30/2024','12:28:00','12:41:27',37
+EXECUTE p_mint_upsert_practicelogs 220,112638,6,'05/20/2024','12:52:00','13:15:24',45
+EXECUTE p_mint_upsert_practicelogs 221,89728,6,'06/08/2024','13:22:00','13:24:52',83
+EXECUTE p_mint_upsert_practicelogs 222,97097,6,'06/04/2024','12:53:00','13:11:14',70
+EXECUTE p_mint_upsert_practicelogs 223,80852,6,'05/20/2024','09:09:00','09:26:44',82
+EXECUTE p_mint_upsert_practicelogs 224,90198,6,'05/26/2024','12:14:00','12:43:53',66
+EXECUTE p_mint_upsert_practicelogs 225,89974,6,'06/07/2024','10:37:00','10:41:34',35
+EXECUTE p_mint_upsert_practicelogs 226,111269,6,'06/03/2024','10:11:00','10:37:51',58
+EXECUTE p_mint_upsert_practicelogs 227,87473,6,'05/29/2024','15:07:00','15:14:27',80
+EXECUTE p_mint_upsert_practicelogs 228,88504,6,'05/26/2024','14:15:00','14:36:13',51
+EXECUTE p_mint_upsert_practicelogs 229,89702,6,'05/24/2024','14:56:00','15:12:59',47
+EXECUTE p_mint_upsert_practicelogs 230,93956,6,'06/05/2024','14:08:00','14:12:46',79
+EXECUTE p_mint_upsert_practicelogs 231,86692,6,'05/30/2024','13:19:00','13:42:28',57
+EXECUTE p_mint_upsert_practicelogs 232,110503,6,'05/29/2024','14:06:00','14:33:39',70
+EXECUTE p_mint_upsert_practicelogs 233,91733,6,'06/05/2024','10:43:00','11:00:58',90
+EXECUTE p_mint_upsert_practicelogs 234,112277,6,'06/05/2024','09:05:00','09:06:00',45
+EXECUTE p_mint_upsert_practicelogs 235,87099,6,'06/01/2024','10:09:00','10:26:46',56
+EXECUTE p_mint_upsert_practicelogs 236,92249,6,'06/06/2024','15:18:00','15:33:03',40
+EXECUTE p_mint_upsert_practicelogs 237,89471,6,'06/03/2024','08:33:00','08:47:19',75
+EXECUTE p_mint_upsert_practicelogs 238,89768,6,'06/06/2024','15:50:00','15:54:27',49
+EXECUTE p_mint_upsert_practicelogs 239,89115,6,'06/04/2024','11:08:00','11:27:26',40
+EXECUTE p_mint_upsert_practicelogs 240,89457,6,'06/01/2024','10:05:00','10:08:00',97
+EXECUTE p_mint_upsert_practicelogs 241,119576,6,'05/25/2024','08:13:00','08:41:54',58
+EXECUTE p_mint_upsert_practicelogs 242,95324,6,'06/08/2024','15:58:00','16:18:58',95
+EXECUTE p_mint_upsert_practicelogs 243,112632,1,'09/10/2023','09:03:00','09:21:08',59
+EXECUTE p_mint_upsert_practicelogs 244,102102,1,'09/23/2023','11:32:00','11:49:52',89
+EXECUTE p_mint_upsert_practicelogs 245,106016,1,'09/29/2023','10:47:00','11:06:12',40
+EXECUTE p_mint_upsert_practicelogs 246,96097,1,'09/26/2023','11:56:00','12:24:15',89
+EXECUTE p_mint_upsert_practicelogs 247,110215,1,'09/17/2023','13:22:00','13:29:39',98
+EXECUTE p_mint_upsert_practicelogs 248,106729,1,'09/12/2023','10:42:00','10:49:16',69
+EXECUTE p_mint_upsert_practicelogs 249,117101,1,'09/24/2023','12:07:00','12:21:56',36
+EXECUTE p_mint_upsert_practicelogs 250,117725,1,'09/29/2023','08:58:00','09:20:24',84
+EXECUTE p_mint_upsert_practicelogs 251,124761,1,'09/21/2023','14:56:00','15:06:29',45
+EXECUTE p_mint_upsert_practicelogs 252,103884,1,'09/10/2023','08:41:00','08:48:52',49
+EXECUTE p_mint_upsert_practicelogs 253,99494,1,'09/16/2023','15:44:00','15:51:35',34
+EXECUTE p_mint_upsert_practicelogs 254,106088,1,'09/21/2023','08:30:00','08:37:42',63
+EXECUTE p_mint_upsert_practicelogs 255,98842,1,'09/20/2023','15:25:00','15:44:12',41
+EXECUTE p_mint_upsert_practicelogs 256,109302,1,'09/21/2023','10:54:00','11:21:52',65
+EXECUTE p_mint_upsert_practicelogs 257,104777,1,'09/12/2023','15:08:00','15:25:43',94
+EXECUTE p_mint_upsert_practicelogs 258,104357,1,'09/15/2023','15:08:00','15:15:59',74
+EXECUTE p_mint_upsert_practicelogs 259,100954,1,'09/14/2023','12:47:00','12:56:03',68
+EXECUTE p_mint_upsert_practicelogs 260,108015,1,'09/20/2023','14:14:00','14:28:57',66
+EXECUTE p_mint_upsert_practicelogs 261,102957,1,'09/29/2023','09:58:00','10:18:57',86
+EXECUTE p_mint_upsert_practicelogs 262,104809,1,'09/15/2023','12:27:00','12:47:34',49
+EXECUTE p_mint_upsert_practicelogs 263,103647,1,'09/18/2023','11:25:00','11:54:57',83
+EXECUTE p_mint_upsert_practicelogs 264,100685,1,'09/25/2023','11:15:00','11:17:59',58
+EXECUTE p_mint_upsert_practicelogs 265,102110,1,'09/25/2023','09:00:00','09:04:10',54
+EXECUTE p_mint_upsert_practicelogs 266,103346,1,'09/28/2023','14:14:00','14:31:25',86
+EXECUTE p_mint_upsert_practicelogs 267,100969,1,'09/24/2023','10:47:00','10:56:52',73
+EXECUTE p_mint_upsert_practicelogs 268,117552,1,'09/12/2023','08:49:00','09:13:05',78
+EXECUTE p_mint_upsert_practicelogs 269,108679,1,'09/21/2023','11:45:00','12:12:57',39
+EXECUTE p_mint_upsert_practicelogs 270,111457,1,'09/11/2023','13:09:00','13:31:41',86
+EXECUTE p_mint_upsert_practicelogs 271,97294,1,'09/15/2023','09:10:00','09:30:52',54
+EXECUTE p_mint_upsert_practicelogs 272,101349,1,'09/24/2023','13:17:00','13:36:36',80
+EXECUTE p_mint_upsert_practicelogs 273,99303,1,'09/28/2023','12:55:00','13:07:23',68
+EXECUTE p_mint_upsert_practicelogs 274,119445,1,'09/15/2023','09:05:00','09:14:15',45
+EXECUTE p_mint_upsert_practicelogs 275,98761,1,'09/10/2023','11:34:00','11:41:28',79
+EXECUTE p_mint_upsert_practicelogs 276,99890,1,'09/21/2023','08:33:00','08:42:31',83
+EXECUTE p_mint_upsert_practicelogs 277,99936,1,'09/21/2023','14:01:00','14:02:07',60
+EXECUTE p_mint_upsert_practicelogs 278,105906,1,'09/11/2023','14:57:00','15:10:23',62
+EXECUTE p_mint_upsert_practicelogs 279,97127,1,'09/12/2023','12:51:00','12:52:48',71
+EXECUTE p_mint_upsert_practicelogs 280,103985,1,'09/17/2023','13:22:00','13:47:42',41
+EXECUTE p_mint_upsert_practicelogs 281,123513,1,'09/18/2023','15:24:00','15:33:51',80
+EXECUTE p_mint_upsert_practicelogs 282,104555,1,'09/13/2023','14:55:00','15:13:12',84
+EXECUTE p_mint_upsert_practicelogs 283,101965,1,'09/25/2023','13:37:00','13:45:21',30
+EXECUTE p_mint_upsert_practicelogs 284,112632,2,'02/05/2024','08:13:00','08:34:37',60
+EXECUTE p_mint_upsert_practicelogs 285,102102,2,'02/14/2024','15:24:00','15:38:39',83
+EXECUTE p_mint_upsert_practicelogs 286,106016,2,'02/01/2024','09:50:00','10:16:05',52
+EXECUTE p_mint_upsert_practicelogs 287,96097,2,'02/02/2024','11:36:00','11:37:17',89
+EXECUTE p_mint_upsert_practicelogs 288,110215,2,'02/05/2024','10:07:00','10:13:07',39
+EXECUTE p_mint_upsert_practicelogs 289,106729,2,'02/01/2024','14:46:00','14:54:28',91
+EXECUTE p_mint_upsert_practicelogs 290,117101,2,'01/31/2024','11:18:00','11:25:34',52
+EXECUTE p_mint_upsert_practicelogs 291,117725,2,'02/11/2024','09:07:00','09:16:37',95
+EXECUTE p_mint_upsert_practicelogs 292,124761,2,'01/28/2024','12:33:00','12:51:17',52
+EXECUTE p_mint_upsert_practicelogs 293,103884,2,'01/29/2024','10:10:00','10:22:27',81
+EXECUTE p_mint_upsert_practicelogs 294,99494,2,'02/09/2024','08:06:00','08:14:44',85
+EXECUTE p_mint_upsert_practicelogs 295,106088,2,'01/29/2024','09:38:00','10:06:28',36
+EXECUTE p_mint_upsert_practicelogs 296,98842,2,'02/04/2024','11:33:00','12:02:54',80
+EXECUTE p_mint_upsert_practicelogs 297,109302,2,'01/31/2024','11:04:00','11:29:33',66
+EXECUTE p_mint_upsert_practicelogs 298,104777,2,'02/09/2024','08:14:00','08:16:45',56
+EXECUTE p_mint_upsert_practicelogs 299,104357,2,'01/30/2024','15:23:00','15:37:18',71
+EXECUTE p_mint_upsert_practicelogs 300,100954,2,'02/11/2024','15:47:00','15:48:06',58
+EXECUTE p_mint_upsert_practicelogs 301,108015,2,'02/10/2024','08:25:00','08:36:46',66
+EXECUTE p_mint_upsert_practicelogs 302,102957,2,'02/03/2024','15:02:00','15:31:28',82
+EXECUTE p_mint_upsert_practicelogs 303,104809,2,'01/29/2024','10:33:00','10:34:02',51
+EXECUTE p_mint_upsert_practicelogs 304,103647,2,'02/10/2024','10:05:00','10:18:14',71
+EXECUTE p_mint_upsert_practicelogs 305,100685,2,'02/01/2024','14:46:00','15:00:07',60
+EXECUTE p_mint_upsert_practicelogs 306,102110,2,'02/13/2024','11:13:00','11:31:47',75
+EXECUTE p_mint_upsert_practicelogs 307,103346,2,'01/28/2024','08:42:00','09:05:26',82
+EXECUTE p_mint_upsert_practicelogs 308,100969,2,'01/28/2024','15:57:00','16:08:48',71
+EXECUTE p_mint_upsert_practicelogs 309,117552,2,'02/13/2024','09:53:00','10:09:02',54
+EXECUTE p_mint_upsert_practicelogs 310,108679,2,'01/27/2024','14:01:00','14:15:13',81
+EXECUTE p_mint_upsert_practicelogs 311,111457,2,'02/13/2024','13:04:00','13:14:18',85
+EXECUTE p_mint_upsert_practicelogs 312,97294,2,'02/09/2024','10:30:00','10:43:09',52
+EXECUTE p_mint_upsert_practicelogs 313,101349,2,'01/27/2024','11:20:00','11:34:08',98
+EXECUTE p_mint_upsert_practicelogs 314,99303,2,'02/11/2024','14:27:00','14:55:08',47
+EXECUTE p_mint_upsert_practicelogs 315,119445,2,'01/31/2024','12:05:00','12:15:44',63
+EXECUTE p_mint_upsert_practicelogs 316,98761,2,'02/11/2024','13:55:00','14:24:06',83
+EXECUTE p_mint_upsert_practicelogs 317,99890,2,'02/13/2024','11:03:00','11:21:41',60
+EXECUTE p_mint_upsert_practicelogs 318,99936,2,'02/05/2024','09:12:00','09:39:24',80
+EXECUTE p_mint_upsert_practicelogs 319,105906,2,'02/04/2024','12:55:00','13:19:01',36
+EXECUTE p_mint_upsert_practicelogs 320,97127,2,'02/01/2024','10:16:00','10:40:01',91
+EXECUTE p_mint_upsert_practicelogs 321,103985,2,'02/01/2024','09:55:00','10:19:43',31
+EXECUTE p_mint_upsert_practicelogs 322,123513,2,'01/31/2024','12:30:00','12:47:56',77
+EXECUTE p_mint_upsert_practicelogs 323,104555,2,'02/03/2024','12:28:00','12:41:42',83
+EXECUTE p_mint_upsert_practicelogs 324,101965,2,'02/11/2024','15:58:00','16:26:20',73
+EXECUTE p_mint_upsert_practicelogs 325,112632,3,'06/01/2024','08:12:00','08:36:28',41
+EXECUTE p_mint_upsert_practicelogs 326,102102,3,'06/05/2024','08:50:00','09:00:51',86
+EXECUTE p_mint_upsert_practicelogs 327,96097,3,'05/21/2024','14:16:00','14:37:27',65
+EXECUTE p_mint_upsert_practicelogs 328,110215,3,'06/03/2024','08:56:00','09:00:05',76
+EXECUTE p_mint_upsert_practicelogs 329,106729,3,'06/02/2024','13:14:00','13:33:50',57
+EXECUTE p_mint_upsert_practicelogs 330,117101,3,'05/22/2024','15:09:00','15:16:16',49
+EXECUTE p_mint_upsert_practicelogs 331,117725,3,'05/23/2024','11:00:00','11:24:23',56
+EXECUTE p_mint_upsert_practicelogs 332,124761,3,'05/23/2024','08:58:00','09:11:59',70
+EXECUTE p_mint_upsert_practicelogs 333,99494,3,'06/04/2024','12:03:00','12:03:34',72
+EXECUTE p_mint_upsert_practicelogs 334,106088,3,'05/30/2024','09:11:00','09:25:13',60
+EXECUTE p_mint_upsert_practicelogs 335,98842,3,'06/06/2024','10:20:00','10:45:52',89
+EXECUTE p_mint_upsert_practicelogs 336,109302,3,'05/22/2024','15:18:00','15:21:18',43
+EXECUTE p_mint_upsert_practicelogs 337,104777,3,'05/31/2024','15:44:00','16:09:14',50
+EXECUTE p_mint_upsert_practicelogs 338,104357,3,'06/08/2024','08:52:00','09:11:11',85
+EXECUTE p_mint_upsert_practicelogs 339,100954,3,'05/31/2024','08:33:00','08:46:00',38
+EXECUTE p_mint_upsert_practicelogs 340,108015,3,'05/20/2024','12:10:00','12:26:08',53
+EXECUTE p_mint_upsert_practicelogs 341,102957,3,'05/24/2024','15:37:00','15:45:30',71
+EXECUTE p_mint_upsert_practicelogs 342,104809,3,'05/24/2024','13:20:00','13:29:38',62
+EXECUTE p_mint_upsert_practicelogs 343,103647,3,'06/01/2024','11:15:00','11:23:46',85
+EXECUTE p_mint_upsert_practicelogs 344,100685,3,'05/25/2024','08:29:00','08:41:47',52
+EXECUTE p_mint_upsert_practicelogs 345,102110,3,'05/25/2024','12:11:00','12:33:50',34
+EXECUTE p_mint_upsert_practicelogs 346,103346,3,'05/25/2024','09:25:00','09:43:14',63
+EXECUTE p_mint_upsert_practicelogs 347,117552,3,'05/20/2024','14:24:00','14:37:43',89
+EXECUTE p_mint_upsert_practicelogs 348,108679,3,'05/26/2024','09:58:00','10:14:53',81
+EXECUTE p_mint_upsert_practicelogs 349,111457,3,'05/20/2024','09:27:00','09:56:08',47
+EXECUTE p_mint_upsert_practicelogs 350,97294,3,'06/03/2024','11:17:00','11:44:28',56
+EXECUTE p_mint_upsert_practicelogs 351,101349,3,'06/04/2024','12:43:00','13:07:28',85
+EXECUTE p_mint_upsert_practicelogs 352,99303,3,'05/29/2024','08:37:00','08:58:08',47
+EXECUTE p_mint_upsert_practicelogs 353,119445,3,'05/24/2024','11:08:00','11:26:36',83
+EXECUTE p_mint_upsert_practicelogs 354,98761,3,'05/31/2024','11:43:00','11:52:59',31
+EXECUTE p_mint_upsert_practicelogs 355,99890,3,'06/08/2024','12:38:00','12:38:34',48
+EXECUTE p_mint_upsert_practicelogs 356,99936,3,'05/30/2024','11:00:00','11:09:09',47
+EXECUTE p_mint_upsert_practicelogs 357,105906,3,'05/23/2024','09:57:00','10:25:58',46
+EXECUTE p_mint_upsert_practicelogs 358,97127,3,'05/30/2024','10:55:00','11:19:38',81
+EXECUTE p_mint_upsert_practicelogs 359,103985,3,'05/23/2024','09:18:00','09:42:53',64
+EXECUTE p_mint_upsert_practicelogs 360,123513,3,'05/29/2024','14:39:00','14:58:55',99
+EXECUTE p_mint_upsert_practicelogs 361,104555,3,'06/02/2024','12:08:00','12:28:44',84
+EXECUTE p_mint_upsert_practicelogs 362,101965,3,'05/22/2024','12:13:00','12:41:50',91
+EXECUTE p_mint_upsert_practicelogs 363,96541,4,'09/23/2023','14:06:00','14:23:11',52
+EXECUTE p_mint_upsert_practicelogs 364,91814,4,'09/15/2023','10:51:00','11:13:32',97
+EXECUTE p_mint_upsert_practicelogs 365,84065,4,'09/13/2023','12:53:00','13:17:54',55
+EXECUTE p_mint_upsert_practicelogs 366,89316,4,'09/10/2023','10:03:00','10:09:44',33
+EXECUTE p_mint_upsert_practicelogs 367,124995,4,'09/25/2023','09:50:00','09:58:36',74
+EXECUTE p_mint_upsert_practicelogs 368,86548,4,'09/16/2023','11:59:00','12:18:57',31
+EXECUTE p_mint_upsert_practicelogs 369,93253,4,'09/23/2023','09:44:00','10:03:00',78
+EXECUTE p_mint_upsert_practicelogs 370,89138,4,'09/27/2023','10:20:00','10:21:34',85
+EXECUTE p_mint_upsert_practicelogs 371,89607,4,'09/11/2023','09:57:00','10:22:11',65
+EXECUTE p_mint_upsert_practicelogs 372,86670,4,'09/18/2023','10:47:00','11:13:21',91
+EXECUTE p_mint_upsert_practicelogs 373,85995,4,'09/16/2023','15:23:00','15:45:15',50
+EXECUTE p_mint_upsert_practicelogs 374,89765,4,'09/23/2023','08:50:00','08:51:41',52
+EXECUTE p_mint_upsert_practicelogs 375,85551,4,'09/13/2023','11:14:00','11:24:46',52
+EXECUTE p_mint_upsert_practicelogs 376,88549,4,'09/15/2023','09:44:00','09:51:32',48
+EXECUTE p_mint_upsert_practicelogs 377,90661,4,'09/19/2023','11:18:00','11:29:22',30
+EXECUTE p_mint_upsert_practicelogs 378,86591,4,'09/17/2023','12:25:00','12:29:29',88
+EXECUTE p_mint_upsert_practicelogs 379,88387,4,'09/22/2023','14:52:00','15:18:35',89
+EXECUTE p_mint_upsert_practicelogs 380,112638,4,'09/12/2023','09:08:00','09:11:41',77
+EXECUTE p_mint_upsert_practicelogs 381,89728,4,'09/19/2023','10:09:00','10:38:10',87
+EXECUTE p_mint_upsert_practicelogs 382,97097,4,'09/11/2023','14:32:00','14:52:33',70
+EXECUTE p_mint_upsert_practicelogs 383,80852,4,'09/18/2023','14:12:00','14:41:22',85
+EXECUTE p_mint_upsert_practicelogs 384,90198,4,'09/10/2023','11:50:00','11:56:52',34
+EXECUTE p_mint_upsert_practicelogs 385,89974,4,'09/27/2023','10:38:00','10:46:11',80
+EXECUTE p_mint_upsert_practicelogs 386,111269,4,'09/17/2023','08:23:00','08:25:33',85
+EXECUTE p_mint_upsert_practicelogs 387,87473,4,'09/16/2023','12:25:00','12:46:24',52
+EXECUTE p_mint_upsert_practicelogs 388,88504,4,'09/22/2023','14:00:00','14:12:44',95
+EXECUTE p_mint_upsert_practicelogs 389,89702,4,'09/14/2023','11:27:00','11:38:55',71
+EXECUTE p_mint_upsert_practicelogs 390,93956,4,'09/23/2023','08:33:00','08:45:04',34
+EXECUTE p_mint_upsert_practicelogs 391,86692,4,'09/22/2023','08:51:00','09:09:00',40
+EXECUTE p_mint_upsert_practicelogs 392,110503,4,'09/13/2023','14:31:00','14:51:05',77
+EXECUTE p_mint_upsert_practicelogs 393,91733,4,'09/17/2023','12:09:00','12:28:56',62
+EXECUTE p_mint_upsert_practicelogs 394,112277,4,'09/12/2023','14:28:00','14:29:51',72
+EXECUTE p_mint_upsert_practicelogs 395,87099,4,'09/13/2023','15:54:00','15:57:55',46
+EXECUTE p_mint_upsert_practicelogs 396,90617,4,'09/28/2023','15:00:00','15:10:05',50
+EXECUTE p_mint_upsert_practicelogs 397,92249,4,'09/19/2023','15:11:00','15:34:40',32
+EXECUTE p_mint_upsert_practicelogs 398,89471,4,'09/14/2023','10:46:00','10:58:10',83
+EXECUTE p_mint_upsert_practicelogs 399,89768,4,'09/23/2023','15:00:00','15:26:20',54
+EXECUTE p_mint_upsert_practicelogs 400,89115,4,'09/13/2023','11:33:00','11:58:57',36
+EXECUTE p_mint_upsert_practicelogs 401,89457,4,'09/17/2023','15:23:00','15:29:35',85
+EXECUTE p_mint_upsert_practicelogs 402,119576,4,'09/16/2023','11:04:00','11:10:19',46
+EXECUTE p_mint_upsert_practicelogs 403,95324,4,'09/12/2023','10:35:00','10:40:28',38
+EXECUTE p_mint_upsert_practicelogs 404,96541,5,'02/10/2024','14:06:00','14:25:38',79
+EXECUTE p_mint_upsert_practicelogs 405,91814,5,'02/10/2024','11:44:00','12:04:50',58
+EXECUTE p_mint_upsert_practicelogs 406,84065,5,'01/28/2024','12:12:00','12:20:07',96
+EXECUTE p_mint_upsert_practicelogs 407,89316,5,'02/10/2024','12:39:00','12:43:54',60
+EXECUTE p_mint_upsert_practicelogs 408,124995,5,'02/11/2024','10:21:00','10:47:37',48
+EXECUTE p_mint_upsert_practicelogs 409,86548,5,'01/29/2024','10:19:00','10:46:38',91
+EXECUTE p_mint_upsert_practicelogs 410,93253,5,'02/12/2024','08:08:00','08:31:55',41
+EXECUTE p_mint_upsert_practicelogs 411,89138,5,'02/08/2024','13:05:00','13:29:29',87
+EXECUTE p_mint_upsert_practicelogs 412,89607,5,'02/02/2024','11:20:00','11:45:34',54
+EXECUTE p_mint_upsert_practicelogs 413,86670,5,'02/07/2024','14:07:00','14:35:45',75
+EXECUTE p_mint_upsert_practicelogs 414,85995,5,'01/27/2024','12:24:00','12:51:06',62
+EXECUTE p_mint_upsert_practicelogs 415,89765,5,'02/11/2024','13:30:00','13:56:20',68
+EXECUTE p_mint_upsert_practicelogs 416,85551,5,'02/02/2024','12:31:00','12:44:50',77
+EXECUTE p_mint_upsert_practicelogs 417,88549,5,'02/07/2024','08:08:00','08:25:53',95
+EXECUTE p_mint_upsert_practicelogs 418,90661,5,'02/14/2024','12:59:00','13:27:24',80
+EXECUTE p_mint_upsert_practicelogs 419,86591,5,'01/27/2024','12:25:00','12:37:24',33
+EXECUTE p_mint_upsert_practicelogs 420,88387,5,'02/10/2024','11:18:00','11:19:06',49
+EXECUTE p_mint_upsert_practicelogs 421,112638,5,'02/01/2024','11:45:00','11:59:16',94
+EXECUTE p_mint_upsert_practicelogs 422,89728,5,'02/01/2024','13:54:00','14:15:41',81
+EXECUTE p_mint_upsert_practicelogs 423,97097,5,'01/31/2024','15:35:00','15:59:12',41
+EXECUTE p_mint_upsert_practicelogs 424,80852,5,'02/08/2024','10:37:00','10:52:44',69
+EXECUTE p_mint_upsert_practicelogs 425,90198,5,'02/14/2024','09:08:00','09:27:56',35
+EXECUTE p_mint_upsert_practicelogs 426,89974,5,'02/11/2024','10:12:00','10:15:27',80
+EXECUTE p_mint_upsert_practicelogs 427,111269,5,'02/08/2024','10:56:00','10:56:34',65
+EXECUTE p_mint_upsert_practicelogs 428,87473,5,'01/27/2024','10:20:00','10:34:35',62
+EXECUTE p_mint_upsert_practicelogs 429,88504,5,'01/30/2024','10:38:00','10:53:05',46
+EXECUTE p_mint_upsert_practicelogs 430,89702,5,'02/14/2024','15:50:00','16:07:41',80
+EXECUTE p_mint_upsert_practicelogs 431,93956,5,'02/01/2024','13:20:00','13:30:19',39
+EXECUTE p_mint_upsert_practicelogs 432,86692,5,'01/30/2024','08:29:00','08:43:17',51
+EXECUTE p_mint_upsert_practicelogs 433,110503,5,'01/31/2024','11:26:00','11:48:10',99
+EXECUTE p_mint_upsert_practicelogs 434,91733,5,'02/04/2024','08:59:00','09:13:21',97
+EXECUTE p_mint_upsert_practicelogs 435,112277,5,'01/31/2024','10:34:00','10:44:43',66
+EXECUTE p_mint_upsert_practicelogs 436,87099,5,'02/03/2024','08:00:00','08:19:29',33
+EXECUTE p_mint_upsert_practicelogs 437,90617,5,'01/30/2024','09:10:00','09:21:57',80
+EXECUTE p_mint_upsert_practicelogs 438,92249,5,'02/05/2024','14:53:00','15:17:01',50
+EXECUTE p_mint_upsert_practicelogs 439,89471,5,'01/31/2024','12:12:00','12:29:38',55
+EXECUTE p_mint_upsert_practicelogs 440,89768,5,'02/03/2024','12:55:00','12:58:11',61
+EXECUTE p_mint_upsert_practicelogs 441,89115,5,'02/04/2024','13:06:00','13:26:19',68
+EXECUTE p_mint_upsert_practicelogs 442,89457,5,'02/10/2024','11:16:00','11:27:26',83
+EXECUTE p_mint_upsert_practicelogs 443,119576,5,'01/28/2024','12:26:00','12:41:04',61
+EXECUTE p_mint_upsert_practicelogs 444,95324,5,'02/10/2024','14:13:00','14:29:27',71
+EXECUTE p_mint_upsert_practicelogs 445,96541,6,'05/30/2024','11:00:00','11:02:27',87
+EXECUTE p_mint_upsert_practicelogs 446,91814,6,'06/02/2024','08:49:00','09:10:26',46
+EXECUTE p_mint_upsert_practicelogs 447,84065,6,'06/01/2024','13:56:00','14:20:51',39
+EXECUTE p_mint_upsert_practicelogs 448,89316,6,'06/03/2024','12:52:00','13:06:45',35
+EXECUTE p_mint_upsert_practicelogs 449,124995,6,'06/01/2024','09:09:00','09:38:01',41
+EXECUTE p_mint_upsert_practicelogs 450,86548,6,'06/08/2024','09:00:00','09:09:00',38
+EXECUTE p_mint_upsert_practicelogs 451,93253,6,'05/21/2024','10:31:00','10:56:44',54
+EXECUTE p_mint_upsert_practicelogs 452,89138,6,'05/23/2024','15:25:00','15:49:12',64
+EXECUTE p_mint_upsert_practicelogs 453,89607,6,'06/02/2024','15:01:00','15:17:02',89
+EXECUTE p_mint_upsert_practicelogs 454,86670,6,'05/21/2024','15:02:00','15:04:28',45
+EXECUTE p_mint_upsert_practicelogs 455,85995,6,'05/29/2024','12:11:00','12:21:17',61
+EXECUTE p_mint_upsert_practicelogs 456,89765,6,'05/30/2024','14:49:00','15:01:14',76
+EXECUTE p_mint_upsert_practicelogs 457,85551,6,'05/26/2024','12:15:00','12:30:58',91
+EXECUTE p_mint_upsert_practicelogs 458,88549,6,'05/30/2024','14:36:00','14:57:17',42
+EXECUTE p_mint_upsert_practicelogs 459,90661,6,'05/21/2024','09:03:00','09:27:41',35
+EXECUTE p_mint_upsert_practicelogs 460,86591,6,'05/29/2024','08:01:00','08:28:40',92
+EXECUTE p_mint_upsert_practicelogs 461,88387,6,'05/31/2024','08:14:00','08:35:29',32
+EXECUTE p_mint_upsert_practicelogs 462,112638,6,'05/28/2024','12:14:00','12:43:25',45
+EXECUTE p_mint_upsert_practicelogs 463,89728,6,'05/25/2024','10:23:00','10:47:38',48
+EXECUTE p_mint_upsert_practicelogs 464,97097,6,'06/03/2024','10:11:00','10:37:35',67
+EXECUTE p_mint_upsert_practicelogs 465,80852,6,'06/04/2024','15:22:00','15:26:44',43
+EXECUTE p_mint_upsert_practicelogs 466,90198,6,'05/28/2024','09:16:00','09:27:22',72
+EXECUTE p_mint_upsert_practicelogs 467,89974,6,'05/22/2024','09:47:00','10:05:28',36
+EXECUTE p_mint_upsert_practicelogs 468,111269,6,'06/03/2024','14:53:00','15:18:13',60
+EXECUTE p_mint_upsert_practicelogs 469,87473,6,'05/29/2024','09:02:00','09:20:06',95
+EXECUTE p_mint_upsert_practicelogs 470,88504,6,'06/02/2024','08:38:00','09:04:54',71
+EXECUTE p_mint_upsert_practicelogs 471,89702,6,'05/29/2024','11:46:00','11:48:19',54
+EXECUTE p_mint_upsert_practicelogs 472,93956,6,'06/07/2024','15:38:00','15:38:50',50
+EXECUTE p_mint_upsert_practicelogs 473,86692,6,'06/07/2024','14:10:00','14:22:14',88
+EXECUTE p_mint_upsert_practicelogs 474,110503,6,'06/06/2024','08:15:00','08:31:41',47
+EXECUTE p_mint_upsert_practicelogs 475,91733,6,'06/03/2024','12:53:00','13:10:09',53
+EXECUTE p_mint_upsert_practicelogs 476,112277,6,'06/01/2024','09:48:00','09:50:28',57
+EXECUTE p_mint_upsert_practicelogs 477,87099,6,'06/02/2024','14:39:00','14:40:35',63
+EXECUTE p_mint_upsert_practicelogs 478,92249,6,'06/03/2024','08:10:00','08:21:29',96
+EXECUTE p_mint_upsert_practicelogs 479,89471,6,'05/28/2024','13:33:00','13:55:54',46
+EXECUTE p_mint_upsert_practicelogs 480,89768,6,'05/29/2024','12:00:00','12:10:09',97
+EXECUTE p_mint_upsert_practicelogs 481,89115,6,'05/22/2024','14:05:00','14:08:50',60
+EXECUTE p_mint_upsert_practicelogs 482,89457,6,'05/26/2024','13:17:00','13:22:24',74
+EXECUTE p_mint_upsert_practicelogs 483,119576,6,'06/04/2024','15:06:00','15:35:23',42
+EXECUTE p_mint_upsert_practicelogs 484,95324,6,'06/01/2024','14:47:00','15:16:57',79
+EXECUTE p_mint_upsert_practicelogs 485,112632,1,'09/15/2023','11:18:00','11:31:45',78
+EXECUTE p_mint_upsert_practicelogs 486,102102,1,'09/11/2023','10:41:00','10:45:36',80
+EXECUTE p_mint_upsert_practicelogs 487,106016,1,'09/18/2023','10:44:00','11:13:45',77
+EXECUTE p_mint_upsert_practicelogs 488,96097,1,'09/18/2023','15:44:00','15:48:59',89
+EXECUTE p_mint_upsert_practicelogs 489,110215,1,'09/27/2023','12:39:00','12:53:58',95
+EXECUTE p_mint_upsert_practicelogs 490,106729,1,'09/25/2023','10:49:00','10:52:13',73
+EXECUTE p_mint_upsert_practicelogs 491,117101,1,'09/14/2023','14:17:00','14:44:56',71
+EXECUTE p_mint_upsert_practicelogs 492,117725,1,'09/11/2023','09:47:00','10:06:39',64
+EXECUTE p_mint_upsert_practicelogs 493,124761,1,'09/27/2023','10:14:00','10:20:38',63
+EXECUTE p_mint_upsert_practicelogs 494,103884,1,'09/24/2023','13:41:00','14:05:14',40
+EXECUTE p_mint_upsert_practicelogs 495,99494,1,'09/18/2023','10:13:00','10:32:58',42
+EXECUTE p_mint_upsert_practicelogs 496,106088,1,'09/23/2023','11:44:00','11:48:25',75
+EXECUTE p_mint_upsert_practicelogs 497,98842,1,'09/13/2023','11:22:00','11:38:54',37
+EXECUTE p_mint_upsert_practicelogs 498,109302,1,'09/21/2023','11:37:00','11:39:32',44
+EXECUTE p_mint_upsert_practicelogs 499,104777,1,'09/26/2023','12:58:00','13:20:56',35
+EXECUTE p_mint_upsert_practicelogs 500,104357,1,'09/28/2023','13:45:00','13:51:04',54
+EXECUTE p_mint_upsert_practicelogs 501,100954,1,'09/23/2023','11:31:00','11:57:36',85
+EXECUTE p_mint_upsert_practicelogs 502,108015,1,'09/25/2023','08:32:00','08:36:59',88
+EXECUTE p_mint_upsert_practicelogs 503,102957,1,'09/29/2023','08:59:00','09:08:24',61
+EXECUTE p_mint_upsert_practicelogs 504,104809,1,'09/20/2023','11:45:00','11:47:54',42
+EXECUTE p_mint_upsert_practicelogs 505,103647,1,'09/10/2023','08:20:00','08:41:47',72
+EXECUTE p_mint_upsert_practicelogs 506,100685,1,'09/12/2023','09:53:00','10:17:44',78
+EXECUTE p_mint_upsert_practicelogs 507,102110,1,'09/24/2023','13:50:00','14:01:47',46
+EXECUTE p_mint_upsert_practicelogs 508,103346,1,'09/12/2023','09:57:00','10:08:09',47
+EXECUTE p_mint_upsert_practicelogs 509,100969,1,'09/17/2023','09:14:00','09:23:49',69
+EXECUTE p_mint_upsert_practicelogs 510,117552,1,'09/25/2023','09:34:00','09:39:21',59
+EXECUTE p_mint_upsert_practicelogs 511,108679,1,'09/19/2023','15:53:00','15:59:15',81
+EXECUTE p_mint_upsert_practicelogs 512,111457,1,'09/19/2023','11:25:00','11:34:51',47
+EXECUTE p_mint_upsert_practicelogs 513,97294,1,'09/24/2023','10:01:00','10:29:57',76
+EXECUTE p_mint_upsert_practicelogs 514,101349,1,'09/16/2023','10:36:00','10:48:01',84
+EXECUTE p_mint_upsert_practicelogs 515,99303,1,'09/15/2023','14:23:00','14:26:10',87
+EXECUTE p_mint_upsert_practicelogs 516,119445,1,'09/11/2023','13:03:00','13:08:46',84
+EXECUTE p_mint_upsert_practicelogs 517,98761,1,'09/19/2023','09:47:00','10:03:43',51
+EXECUTE p_mint_upsert_practicelogs 518,99890,1,'09/23/2023','12:54:00','13:07:02',58
+EXECUTE p_mint_upsert_practicelogs 519,99936,1,'09/24/2023','09:06:00','09:18:26',66
+EXECUTE p_mint_upsert_practicelogs 520,105906,1,'09/25/2023','13:00:00','13:20:24',45
+EXECUTE p_mint_upsert_practicelogs 521,97127,1,'09/24/2023','13:17:00','13:46:29',35
+EXECUTE p_mint_upsert_practicelogs 522,103985,1,'09/27/2023','08:25:00','08:42:23',43
+EXECUTE p_mint_upsert_practicelogs 523,123513,1,'09/16/2023','11:28:00','11:40:09',52
+EXECUTE p_mint_upsert_practicelogs 524,104555,1,'09/28/2023','08:31:00','08:53:57',99
+EXECUTE p_mint_upsert_practicelogs 525,101965,1,'09/27/2023','09:01:00','09:19:05',83
+EXECUTE p_mint_upsert_practicelogs 526,112632,2,'01/29/2024','09:34:00','09:53:24',71
+EXECUTE p_mint_upsert_practicelogs 527,102102,2,'02/11/2024','08:32:00','08:36:02',93
+EXECUTE p_mint_upsert_practicelogs 528,106016,2,'02/03/2024','14:38:00','14:41:49',52
+EXECUTE p_mint_upsert_practicelogs 529,96097,2,'02/01/2024','12:09:00','12:34:10',63
+EXECUTE p_mint_upsert_practicelogs 530,110215,2,'02/09/2024','15:36:00','15:57:07',72
+EXECUTE p_mint_upsert_practicelogs 531,106729,2,'01/27/2024','11:01:00','11:04:06',61
+EXECUTE p_mint_upsert_practicelogs 532,117101,2,'01/28/2024','09:55:00','10:22:33',67
+EXECUTE p_mint_upsert_practicelogs 533,117725,2,'01/30/2024','09:47:00','09:52:19',33
+EXECUTE p_mint_upsert_practicelogs 534,124761,2,'01/26/2024','12:17:00','12:32:04',35
+EXECUTE p_mint_upsert_practicelogs 535,103884,2,'02/10/2024','11:34:00','11:38:52',79
+EXECUTE p_mint_upsert_practicelogs 536,99494,2,'02/03/2024','13:16:00','13:37:03',52
+EXECUTE p_mint_upsert_practicelogs 537,106088,2,'01/27/2024','14:51:00','15:15:58',54
+EXECUTE p_mint_upsert_practicelogs 538,98842,2,'01/27/2024','11:26:00','11:50:23',54
+EXECUTE p_mint_upsert_practicelogs 539,109302,2,'01/27/2024','13:25:00','13:30:27',45
+EXECUTE p_mint_upsert_practicelogs 540,104777,2,'01/29/2024','11:00:00','11:24:55',45
+EXECUTE p_mint_upsert_practicelogs 541,104357,2,'02/14/2024','10:07:00','10:14:34',84
+EXECUTE p_mint_upsert_practicelogs 542,100954,2,'02/12/2024','09:08:00','09:26:47',40
+EXECUTE p_mint_upsert_practicelogs 543,108015,2,'02/07/2024','15:41:00','16:10:48',62
+EXECUTE p_mint_upsert_practicelogs 544,102957,2,'02/09/2024','10:47:00','11:12:14',84
+EXECUTE p_mint_upsert_practicelogs 545,104809,2,'02/08/2024','08:30:00','08:55:46',43
+EXECUTE p_mint_upsert_practicelogs 546,103647,2,'02/10/2024','10:45:00','11:14:11',45
+EXECUTE p_mint_upsert_practicelogs 547,100685,2,'02/11/2024','11:55:00','12:19:12',92
+EXECUTE p_mint_upsert_practicelogs 548,102110,2,'02/05/2024','11:00:00','11:07:13',67
+EXECUTE p_mint_upsert_practicelogs 549,103346,2,'02/08/2024','13:23:00','13:35:39',31
+EXECUTE p_mint_upsert_practicelogs 550,100969,2,'02/14/2024','13:45:00','14:08:21',68
+EXECUTE p_mint_upsert_practicelogs 551,117552,2,'02/06/2024','15:48:00','16:10:35',58
+EXECUTE p_mint_upsert_practicelogs 552,108679,2,'02/12/2024','13:18:00','13:41:58',34
+EXECUTE p_mint_upsert_practicelogs 553,111457,2,'01/29/2024','11:28:00','11:31:59',72
+EXECUTE p_mint_upsert_practicelogs 554,97294,2,'01/27/2024','12:22:00','12:25:52',97
+EXECUTE p_mint_upsert_practicelogs 555,101349,2,'02/03/2024','11:21:00','11:44:17',64
+EXECUTE p_mint_upsert_practicelogs 556,99303,2,'02/14/2024','14:10:00','14:21:01',35
+EXECUTE p_mint_upsert_practicelogs 557,119445,2,'01/28/2024','11:25:00','11:33:23',89
+EXECUTE p_mint_upsert_practicelogs 558,98761,2,'01/28/2024','13:41:00','13:59:22',36
+EXECUTE p_mint_upsert_practicelogs 559,99890,2,'01/27/2024','08:06:00','08:29:17',92
+EXECUTE p_mint_upsert_practicelogs 560,99936,2,'02/11/2024','15:08:00','15:20:05',31
+EXECUTE p_mint_upsert_practicelogs 561,105906,2,'02/12/2024','12:19:00','12:24:26',81
+EXECUTE p_mint_upsert_practicelogs 562,97127,2,'01/28/2024','09:29:00','09:35:07',49
+EXECUTE p_mint_upsert_practicelogs 563,103985,2,'02/08/2024','14:38:00','14:45:16',94
+EXECUTE p_mint_upsert_practicelogs 564,123513,2,'02/08/2024','11:29:00','11:41:39',59
+EXECUTE p_mint_upsert_practicelogs 565,104555,2,'02/09/2024','08:35:00','09:03:20',31
+EXECUTE p_mint_upsert_practicelogs 566,101965,2,'02/04/2024','13:12:00','13:32:21',88
+EXECUTE p_mint_upsert_practicelogs 567,112632,3,'06/03/2024','14:40:00','15:09:26',80
+EXECUTE p_mint_upsert_practicelogs 568,102102,3,'06/03/2024','08:28:00','08:39:50',56
+EXECUTE p_mint_upsert_practicelogs 569,96097,3,'05/20/2024','10:25:00','10:42:15',78
+EXECUTE p_mint_upsert_practicelogs 570,110215,3,'05/26/2024','12:31:00','12:32:55',75
+EXECUTE p_mint_upsert_practicelogs 571,106729,3,'05/21/2024','13:27:00','13:40:25',87
+EXECUTE p_mint_upsert_practicelogs 572,117101,3,'06/01/2024','12:35:00','12:49:09',77
+EXECUTE p_mint_upsert_practicelogs 573,117725,3,'05/30/2024','10:08:00','10:12:17',75
+EXECUTE p_mint_upsert_practicelogs 574,124761,3,'06/02/2024','12:57:00','13:14:11',79
+EXECUTE p_mint_upsert_practicelogs 575,99494,3,'05/22/2024','10:16:00','10:17:17',80
+EXECUTE p_mint_upsert_practicelogs 576,106088,3,'05/23/2024','14:16:00','14:28:03',84
+EXECUTE p_mint_upsert_practicelogs 577,98842,3,'05/31/2024','14:20:00','14:36:22',81
+EXECUTE p_mint_upsert_practicelogs 578,109302,3,'05/29/2024','11:06:00','11:28:42',33
+EXECUTE p_mint_upsert_practicelogs 579,104777,3,'05/26/2024','10:42:00','10:58:11',34
+EXECUTE p_mint_upsert_practicelogs 580,104357,3,'06/04/2024','12:09:00','12:19:00',88
+EXECUTE p_mint_upsert_practicelogs 581,100954,3,'05/22/2024','13:34:00','13:51:46',94
+EXECUTE p_mint_upsert_practicelogs 582,108015,3,'06/02/2024','10:18:00','10:45:29',36
+EXECUTE p_mint_upsert_practicelogs 583,102957,3,'06/01/2024','14:53:00','15:22:15',65
+EXECUTE p_mint_upsert_practicelogs 584,104809,3,'06/01/2024','10:54:00','11:08:46',38
+EXECUTE p_mint_upsert_practicelogs 585,103647,3,'05/29/2024','15:24:00','15:41:00',40
+EXECUTE p_mint_upsert_practicelogs 586,100685,3,'06/04/2024','10:08:00','10:15:08',31
+EXECUTE p_mint_upsert_practicelogs 587,102110,3,'05/23/2024','15:12:00','15:14:38',64
+EXECUTE p_mint_upsert_practicelogs 588,103346,3,'05/26/2024','13:54:00','14:02:31',70
+EXECUTE p_mint_upsert_practicelogs 589,117552,3,'05/25/2024','11:17:00','11:42:36',75
+EXECUTE p_mint_upsert_practicelogs 590,108679,3,'05/22/2024','10:27:00','10:44:27',37
+EXECUTE p_mint_upsert_practicelogs 591,111457,3,'05/21/2024','11:51:00','11:54:18',75
+EXECUTE p_mint_upsert_practicelogs 592,97294,3,'06/03/2024','08:16:00','08:42:15',88
+EXECUTE p_mint_upsert_practicelogs 593,101349,3,'05/23/2024','08:34:00','09:03:35',36
+EXECUTE p_mint_upsert_practicelogs 594,99303,3,'06/08/2024','12:40:00','12:51:08',92
+EXECUTE p_mint_upsert_practicelogs 595,119445,3,'05/21/2024','10:00:00','10:17:47',91
+EXECUTE p_mint_upsert_practicelogs 596,98761,3,'05/21/2024','09:47:00','10:13:24',57
+EXECUTE p_mint_upsert_practicelogs 597,99890,3,'05/27/2024','13:47:00','14:07:50',94
+EXECUTE p_mint_upsert_practicelogs 598,99936,3,'05/29/2024','13:37:00','13:54:37',83
+EXECUTE p_mint_upsert_practicelogs 599,105906,3,'05/21/2024','13:42:00','14:05:48',35
+EXECUTE p_mint_upsert_practicelogs 600,97127,3,'05/30/2024','13:51:00','14:11:47',66
+EXECUTE p_mint_upsert_practicelogs 601,103985,3,'05/30/2024','10:14:00','10:30:13',75
+EXECUTE p_mint_upsert_practicelogs 602,123513,3,'05/30/2024','08:32:00','08:45:17',89
+EXECUTE p_mint_upsert_practicelogs 603,104555,3,'05/27/2024','09:33:00','09:41:27',52
+EXECUTE p_mint_upsert_practicelogs 604,101965,3,'05/28/2024','09:58:00','10:22:17',59
+EXECUTE p_mint_upsert_practicelogs 605,96541,4,'09/18/2023','10:41:00','10:54:38',61
+EXECUTE p_mint_upsert_practicelogs 606,91814,4,'09/11/2023','15:11:00','15:21:46',84
+EXECUTE p_mint_upsert_practicelogs 607,84065,4,'09/27/2023','15:38:00','15:52:29',99
+EXECUTE p_mint_upsert_practicelogs 608,89316,4,'09/13/2023','14:07:00','14:36:30',72
+EXECUTE p_mint_upsert_practicelogs 609,124995,4,'09/10/2023','10:36:00','10:43:58',70
+EXECUTE p_mint_upsert_practicelogs 610,86548,4,'09/24/2023','09:37:00','09:55:46',42
+EXECUTE p_mint_upsert_practicelogs 611,93253,4,'09/17/2023','13:45:00','14:10:12',84
+EXECUTE p_mint_upsert_practicelogs 612,89138,4,'09/22/2023','15:15:00','15:16:19',64
+EXECUTE p_mint_upsert_practicelogs 613,89607,4,'09/26/2023','10:57:00','11:17:43',66
+EXECUTE p_mint_upsert_practicelogs 614,86670,4,'09/21/2023','13:43:00','13:52:41',77
+EXECUTE p_mint_upsert_practicelogs 615,85995,4,'09/14/2023','14:51:00','14:59:03',65
+EXECUTE p_mint_upsert_practicelogs 616,89765,4,'09/11/2023','10:15:00','10:16:42',91
+EXECUTE p_mint_upsert_practicelogs 617,85551,4,'09/25/2023','14:17:00','14:29:40',89
+EXECUTE p_mint_upsert_practicelogs 618,88549,4,'09/20/2023','12:17:00','12:20:28',84
+EXECUTE p_mint_upsert_practicelogs 619,90661,4,'09/23/2023','08:41:00','09:00:42',32
+EXECUTE p_mint_upsert_practicelogs 620,86591,4,'09/28/2023','13:42:00','14:00:19',58
+EXECUTE p_mint_upsert_practicelogs 621,88387,4,'09/22/2023','10:25:00','10:32:56',44
+EXECUTE p_mint_upsert_practicelogs 622,112638,4,'09/20/2023','12:27:00','12:42:26',36
+EXECUTE p_mint_upsert_practicelogs 623,89728,4,'09/24/2023','14:53:00','15:10:36',66
+EXECUTE p_mint_upsert_practicelogs 624,97097,4,'09/12/2023','13:28:00','13:34:58',51
+EXECUTE p_mint_upsert_practicelogs 625,80852,4,'09/23/2023','14:31:00','14:45:43',56
+EXECUTE p_mint_upsert_practicelogs 626,90198,4,'09/14/2023','11:39:00','11:42:47',88
+EXECUTE p_mint_upsert_practicelogs 627,89974,4,'09/16/2023','09:25:00','09:26:38',63
+EXECUTE p_mint_upsert_practicelogs 628,111269,4,'09/28/2023','14:16:00','14:36:55',86
+EXECUTE p_mint_upsert_practicelogs 629,87473,4,'09/11/2023','13:15:00','13:23:58',66
+EXECUTE p_mint_upsert_practicelogs 630,88504,4,'09/12/2023','10:08:00','10:28:55',36
+EXECUTE p_mint_upsert_practicelogs 631,89702,4,'09/16/2023','15:25:00','15:34:56',38
+EXECUTE p_mint_upsert_practicelogs 632,93956,4,'09/28/2023','09:43:00','10:04:18',76
+EXECUTE p_mint_upsert_practicelogs 633,86692,4,'09/29/2023','15:50:00','15:59:00',87
+EXECUTE p_mint_upsert_practicelogs 634,110503,4,'09/25/2023','08:56:00','09:11:39',73
+EXECUTE p_mint_upsert_practicelogs 635,91733,4,'09/26/2023','14:18:00','14:31:09',69
+EXECUTE p_mint_upsert_practicelogs 636,112277,4,'09/10/2023','14:36:00','14:43:35',76
+EXECUTE p_mint_upsert_practicelogs 637,87099,4,'09/11/2023','10:56:00','11:05:34',58
+EXECUTE p_mint_upsert_practicelogs 638,90617,4,'09/12/2023','09:18:00','09:21:26',74
+EXECUTE p_mint_upsert_practicelogs 639,92249,4,'09/16/2023','09:01:00','09:01:38',53
+EXECUTE p_mint_upsert_practicelogs 640,89471,4,'09/28/2023','10:06:00','10:34:19',46
+EXECUTE p_mint_upsert_practicelogs 641,89768,4,'09/19/2023','14:22:00','14:43:47',82
+EXECUTE p_mint_upsert_practicelogs 642,89115,4,'09/26/2023','10:21:00','10:49:04',31
+EXECUTE p_mint_upsert_practicelogs 643,89457,4,'09/27/2023','09:26:00','09:47:11',74
+EXECUTE p_mint_upsert_practicelogs 644,119576,4,'09/11/2023','11:59:00','12:18:07',42
+EXECUTE p_mint_upsert_practicelogs 645,95324,4,'09/20/2023','11:16:00','11:22:27',58
+EXECUTE p_mint_upsert_practicelogs 646,96541,5,'01/26/2024','08:36:00','08:48:45',90
+EXECUTE p_mint_upsert_practicelogs 647,91814,5,'02/14/2024','09:28:00','09:57:31',51
+EXECUTE p_mint_upsert_practicelogs 648,84065,5,'01/26/2024','11:34:00','11:50:15',93
+EXECUTE p_mint_upsert_practicelogs 649,89316,5,'02/11/2024','14:42:00','14:58:40',64
+EXECUTE p_mint_upsert_practicelogs 650,124995,5,'02/13/2024','08:34:00','08:47:19',71
+EXECUTE p_mint_upsert_practicelogs 651,86548,5,'02/03/2024','15:38:00','15:54:09',36
+EXECUTE p_mint_upsert_practicelogs 652,93253,5,'02/11/2024','14:52:00','15:01:44',88
+EXECUTE p_mint_upsert_practicelogs 653,89138,5,'01/26/2024','13:35:00','13:51:39',60
+EXECUTE p_mint_upsert_practicelogs 654,89607,5,'02/01/2024','14:40:00','14:50:48',50
+EXECUTE p_mint_upsert_practicelogs 655,86670,5,'01/28/2024','13:10:00','13:17:40',81
+EXECUTE p_mint_upsert_practicelogs 656,85995,5,'02/07/2024','08:13:00','08:20:17',77
+EXECUTE p_mint_upsert_practicelogs 657,89765,5,'01/31/2024','12:49:00','12:56:02',83
+EXECUTE p_mint_upsert_practicelogs 658,85551,5,'02/03/2024','15:27:00','15:45:53',62
+EXECUTE p_mint_upsert_practicelogs 659,88549,5,'02/12/2024','15:26:00','15:27:40',59
+EXECUTE p_mint_upsert_practicelogs 660,90661,5,'02/09/2024','09:24:00','09:35:05',96
+EXECUTE p_mint_upsert_practicelogs 661,86591,5,'02/11/2024','15:06:00','15:06:55',43
+EXECUTE p_mint_upsert_practicelogs 662,88387,5,'01/27/2024','10:02:00','10:22:25',64
+EXECUTE p_mint_upsert_practicelogs 663,112638,5,'02/13/2024','08:57:00','09:08:26',63
+EXECUTE p_mint_upsert_practicelogs 664,89728,5,'02/12/2024','13:04:00','13:05:42',51
+EXECUTE p_mint_upsert_practicelogs 665,97097,5,'02/02/2024','13:22:00','13:30:29',77
+EXECUTE p_mint_upsert_practicelogs 666,80852,5,'02/06/2024','08:10:00','08:13:16',46
+EXECUTE p_mint_upsert_practicelogs 667,90198,5,'01/29/2024','09:24:00','09:40:49',52
+EXECUTE p_mint_upsert_practicelogs 668,89974,5,'02/03/2024','08:49:00','09:15:01',52
+EXECUTE p_mint_upsert_practicelogs 669,111269,5,'02/14/2024','15:27:00','15:29:28',51
+EXECUTE p_mint_upsert_practicelogs 670,87473,5,'01/27/2024','09:44:00','09:56:01',72
+EXECUTE p_mint_upsert_practicelogs 671,88504,5,'02/05/2024','09:11:00','09:38:27',40
+EXECUTE p_mint_upsert_practicelogs 672,89702,5,'02/12/2024','12:50:00','13:01:42',75
+EXECUTE p_mint_upsert_practicelogs 673,93956,5,'01/27/2024','15:26:00','15:41:52',94
+EXECUTE p_mint_upsert_practicelogs 674,86692,5,'02/01/2024','10:07:00','10:19:25',91
+EXECUTE p_mint_upsert_practicelogs 675,110503,5,'02/12/2024','14:02:00','14:19:48',75
+EXECUTE p_mint_upsert_practicelogs 676,91733,5,'02/01/2024','11:00:00','11:10:22',59
+EXECUTE p_mint_upsert_practicelogs 677,112277,5,'02/01/2024','12:43:00','12:47:04',31
+EXECUTE p_mint_upsert_practicelogs 678,87099,5,'02/13/2024','14:30:00','14:31:25',39
+EXECUTE p_mint_upsert_practicelogs 679,90617,5,'02/13/2024','15:55:00','16:13:38',45
+EXECUTE p_mint_upsert_practicelogs 680,92249,5,'01/29/2024','12:00:00','12:06:43',58
+EXECUTE p_mint_upsert_practicelogs 681,89471,5,'01/31/2024','11:30:00','11:42:28',68
+EXECUTE p_mint_upsert_practicelogs 682,89768,5,'01/27/2024','08:31:00','08:44:34',95
+EXECUTE p_mint_upsert_practicelogs 683,89115,5,'02/09/2024','09:26:00','09:45:37',80
+EXECUTE p_mint_upsert_practicelogs 684,89457,5,'02/07/2024','14:56:00','15:02:23',81
+EXECUTE p_mint_upsert_practicelogs 685,119576,5,'02/03/2024','10:42:00','10:55:35',95
+EXECUTE p_mint_upsert_practicelogs 686,95324,5,'02/12/2024','15:04:00','15:11:46',88
+EXECUTE p_mint_upsert_practicelogs 687,96541,6,'05/28/2024','15:23:00','15:49:08',59
+EXECUTE p_mint_upsert_practicelogs 688,91814,6,'05/21/2024','10:15:00','10:22:08',56
+EXECUTE p_mint_upsert_practicelogs 689,84065,6,'05/28/2024','09:43:00','09:43:51',49
+EXECUTE p_mint_upsert_practicelogs 690,89316,6,'05/24/2024','15:56:00','16:23:02',89
+EXECUTE p_mint_upsert_practicelogs 691,124995,6,'06/06/2024','09:16:00','09:34:04',80
+EXECUTE p_mint_upsert_practicelogs 692,86548,6,'05/24/2024','13:03:00','13:19:52',45
+EXECUTE p_mint_upsert_practicelogs 693,93253,6,'05/30/2024','11:18:00','11:40:23',37
+EXECUTE p_mint_upsert_practicelogs 694,89138,6,'05/23/2024','15:12:00','15:25:00',33
+EXECUTE p_mint_upsert_practicelogs 695,89607,6,'05/31/2024','15:29:00','15:56:29',48
+EXECUTE p_mint_upsert_practicelogs 696,86670,6,'05/20/2024','08:32:00','08:41:37',77
+EXECUTE p_mint_upsert_practicelogs 697,85995,6,'06/04/2024','10:13:00','10:31:23',37
+EXECUTE p_mint_upsert_practicelogs 698,89765,6,'05/23/2024','13:54:00','14:15:40',99
+EXECUTE p_mint_upsert_practicelogs 699,85551,6,'06/08/2024','12:46:00','13:02:38',63
+EXECUTE p_mint_upsert_practicelogs 700,88549,6,'05/22/2024','13:36:00','13:38:35',69
+EXECUTE p_mint_upsert_practicelogs 701,90661,6,'05/31/2024','14:13:00','14:40:47',93
+EXECUTE p_mint_upsert_practicelogs 702,86591,6,'05/22/2024','08:58:00','09:27:59',70
+EXECUTE p_mint_upsert_practicelogs 703,88387,6,'06/05/2024','13:42:00','13:48:13',55
+EXECUTE p_mint_upsert_practicelogs 704,112638,6,'05/23/2024','10:03:00','10:04:39',52
+EXECUTE p_mint_upsert_practicelogs 705,89728,6,'06/07/2024','09:36:00','10:00:46',41
+EXECUTE p_mint_upsert_practicelogs 706,97097,6,'05/25/2024','13:20:00','13:25:51',34
+EXECUTE p_mint_upsert_practicelogs 707,80852,6,'05/28/2024','11:05:00','11:20:04',77
+EXECUTE p_mint_upsert_practicelogs 708,90198,6,'06/02/2024','14:22:00','14:28:45',84
+EXECUTE p_mint_upsert_practicelogs 709,89974,6,'06/03/2024','09:02:00','09:23:04',39
+EXECUTE p_mint_upsert_practicelogs 710,111269,6,'05/22/2024','15:19:00','15:30:21',66
+EXECUTE p_mint_upsert_practicelogs 711,87473,6,'05/23/2024','08:31:00','08:56:40',82
+EXECUTE p_mint_upsert_practicelogs 712,88504,6,'06/01/2024','12:22:00','12:25:00',60
+EXECUTE p_mint_upsert_practicelogs 713,89702,6,'05/30/2024','08:07:00','08:09:11',58
+EXECUTE p_mint_upsert_practicelogs 714,93956,6,'05/28/2024','11:56:00','12:18:07',32
+EXECUTE p_mint_upsert_practicelogs 715,86692,6,'05/28/2024','11:32:00','11:46:31',64
+EXECUTE p_mint_upsert_practicelogs 716,110503,6,'05/31/2024','10:22:00','10:26:49',46
+EXECUTE p_mint_upsert_practicelogs 717,91733,6,'06/07/2024','11:37:00','11:42:35',66
+EXECUTE p_mint_upsert_practicelogs 718,112277,6,'06/02/2024','15:35:00','16:03:06',55
+EXECUTE p_mint_upsert_practicelogs 719,87099,6,'06/04/2024','11:39:00','12:01:55',79
+EXECUTE p_mint_upsert_practicelogs 720,92249,6,'06/06/2024','12:51:00','12:51:42',47
+EXECUTE p_mint_upsert_practicelogs 721,89471,6,'05/23/2024','08:50:00','09:05:49',73
+EXECUTE p_mint_upsert_practicelogs 722,89768,6,'06/08/2024','14:23:00','14:39:52',90
+EXECUTE p_mint_upsert_practicelogs 723,89115,6,'06/06/2024','14:32:00','14:57:31',61
+EXECUTE p_mint_upsert_practicelogs 724,89457,6,'06/05/2024','12:09:00','12:12:06',91
+EXECUTE p_mint_upsert_practicelogs 725,119576,6,'06/01/2024','13:18:00','13:31:00',36
+EXECUTE p_mint_upsert_practicelogs 726,95324,6,'06/05/2024','12:03:00','12:08:59',35
+set IDENTITY_INSERT practice_logs OFF
+--select * from practice_logs
+
+--Adding the resources data to thte table
+set IDENTITY_INSERT resources ON
+EXECUTE p_mint_upsert_resources 1,'Whose Number is Larger?','Joel Lookadoo','Melissa Authement','Video','2021','','thinktv.pbslearningmedia.org/resource/whose-number-is-larger-video/rise-and-shine-math-time/?student=true&focus=true','Beginning_1','Place_Value '
+EXECUTE p_mint_upsert_resources 2,'Scholastic Success With Grade 1: Math ','Scholastic Teaching Resources','','workbook','','','','Beginning_1','Place_Value '
+EXECUTE p_mint_upsert_resources 3,'Number Line','education.com','','worksheet','','','https://www.education.com/worksheet/article/number-line/?_gl=1*1o8i9ts*_up*MQ..&gclid=CjwKCAjwiNXFBhBKEiwAPSaPCQsbcHVsP2sgUWZ5AVK_fHevnhPu_d154AEODKTw7-PZEoJkm7KU-hoCU2oQAvD_BwE','Beginning_1','Place_Value '
+EXECUTE p_mint_upsert_resources 4,'Race to 120','education.com','','worksheet','','','https://www.education.com/worksheet/article/race-to-120/?_gl=1*1jfx6nn*_up*MQ..&gclid=CjwKCAjwiNXFBhBKEiwAPSaPCQsbcHVsP2sgUWZ5AVK_fHevnhPu_d154AEODKTw7-PZEoJkm7KU-hoCU2oQAvD_BwE','Beginning_1','Place_Value '
+EXECUTE p_mint_upsert_resources 5,'Lacys Place Value ','education.com  ','','worksheet','','','https://www.education.com/worksheet/article/place-value-2-first/?_gl=1*1ot8zpv*_up*MQ..&gclid=CjwKCAjwiNXFBhBKEiwAPSaPCQsbcHVsP2sgUWZ5AVK_fHevnhPu_d154AEODKTw7-PZEoJkm7KU-hoCU2oQAvD_BwE','Beginning_1','Place_Value '
+EXECUTE p_mint_upsert_resources 6,'Scholastic Success With Grade 1: Math ','Scholastic Teaching Resources','','workbook','','','','Middle_1','Addition_Subtraction'
+EXECUTE p_mint_upsert_resources 7,'The Ultimate 1st Grade Math Workbook','IXL Learning','','workbook','2019','','','Middle_1','Addition_Subtraction'
+EXECUTE p_mint_upsert_resources 8,'Brain Quest Math Workbook: 1st Grade','Workman Publishing','','workbook','2024','','','Middle_1','Addition_Subtraction'
+EXECUTE p_mint_upsert_resources 9,'Grade 1 Math Workbook- 200 Essential Math Skills','Mathseeds','','workbook','','','','Middle_1','Addition_Subtraction'
+EXECUTE p_mint_upsert_resources 10,'Subtraction Surprise #8 ','education.com ','','worksheet ','','','https://www.education.com/worksheet/article/subtraction-surprise-8/?_gl=1*od59ck*_up*MQ..&gclid=CjwKCAjwiNXFBhBKEiwAPSaPCfEgOPRwHyOJVtwcge3KGqawgVH86IGfmhQ7TEtML1SFENeMZd_VyBoCRa0QAvD_BwE','Middle_1','Addition_Subtraction'
+EXECUTE p_mint_upsert_resources 11,'Number Forms','WSKG Public Telecommunications Council','','Video','2016','','https://thinktv.pbslearningmedia.org/resource/fa09b2b1-55f0-4762-93ed-1ec028566b03/number-forms/','End_1','Count_Read_Write_120'
+EXECUTE p_mint_upsert_resources 12,'Number Memory Home Activity','PBS','','worksheet','2015','','https://thinktv.pbslearningmedia.org/resource/kids-lab-activities-super-why-number-memory/number-memory-super-why/','End_1','Count_Read_Write_120'
+EXECUTE p_mint_upsert_resources 13,'Scholastic Success With Grade 1: Math ','Scholastic Teaching Resources','','workbook','','','','End_1','Count_Read_Write_120'
+EXECUTE p_mint_upsert_resources 14,'Brain Quest Math Workbook: 1st Grade','Workman Publishing','','workbook','2024','','','End_1','Count_Read_Write_120'
+EXECUTE p_mint_upsert_resources 15,'Teen Numbers','Courtney Colletta ','','video','2021','','thinktv.pbslearningmedia.org/resource/ll105-teen-numbers-video/lets-learn/?student=true&focus=true','End_1','Count_Read_Write_120'
+EXECUTE p_mint_upsert_resources 16,'Add Using an Open Number Line','Lets Learn','','Video','','','thinktv.pbslearningmedia.org/resource/ll116-open-number-line-video/lets-learn/?student=true&focus=true','Beginning_2','Add_Subtract_Regroup_100'
+EXECUTE p_mint_upsert_resources 17,'Scholastic Success With Grade 1: Math ','Scholastic Teaching Resources','','workbook','','','','Beginning_2','Add_Subtract_Regroup_100'
+EXECUTE p_mint_upsert_resources 18,'Brain Quest Math Workbook: 1st Grade','Workman Publishing','','workbook','2024','','','Beginning_2','Add_Subtract_Regroup_100'
+EXECUTE p_mint_upsert_resources 19,'Grade 1 Math Workbook- 200 Essential Math Skills','Mathseeds','','workbook','','','','Beginning_2','Add_Subtract_Regroup_100'
+EXECUTE p_mint_upsert_resources 20,'Regrouping to Subtract','WSKG Public Telecommunications Council','','video','2016','','https://thinktv.pbslearningmedia.org/resource/46404faf-3676-4f81-8d94-4717f3e47351/regrouping-to-subtract/','Beginning_2','Add_Subtract_Regroup_100'
+EXECUTE p_mint_upsert_resources 21,'Place Value Chart: Modeling 2-Digit & 3-Digit Addition and Subtraction ','PBS','','Video','2016','','https://thinktv.pbslearningmedia.org/resource/911a7c1a-aa56-4a6e-830b-2f5577f29a95/place-value-chart/','Middle_2','BaseTen_PlaceValue'
+EXECUTE p_mint_upsert_resources 22,'Scholastic Success With Grade 1: Math ','Scholastic Teaching Resources','','workbook','','','','Middle_2','BaseTen_PlaceValue'
+EXECUTE p_mint_upsert_resources 23,'Quincys Place Value','education.com','','worksheet','','','https://www.education.com/worksheet/article/place-value-1-first/?_gl=1*1pks3ul*_up*MQ..&gclid=CjwKCAjwiNXFBhBKEiwAPSaPCQsbcHVsP2sgUWZ5AVK_fHevnhPu_d154AEODKTw7-PZEoJkm7KU-hoCU2oQAvD_BwE','Middle_2','BaseTen_PlaceValue'
+EXECUTE p_mint_upsert_resources 24,'One More Ten More ','education.com ','','worksheet','','','https://www.education.com/worksheet/article/one-more-ten-more/?_gl=1*1jfx6nn*_up*MQ..&gclid=CjwKCAjwiNXFBhBKEiwAPSaPCQsbcHVsP2sgUWZ5AVK_fHevnhPu_d154AEODKTw7-PZEoJkm7KU-hoCU2oQAvD_BwE','Middle_2','BaseTen_PlaceValue'
+EXECUTE p_mint_upsert_resources 25,'Brain Quest Math Workbook: 1st Grade','Workman Publishing','','workbook','2024','','','Middle_2','BaseTen_PlaceValue'
+EXECUTE p_mint_upsert_resources 26,'Undersea Number Adventure #19 ','education.com ','','worksheet','','','https://www.education.com/worksheet/article/put-numbers-in-order-19/?_gl=1*ka65gn*_up*MQ..&gclid=CjwKCAjwiNXFBhBKEiwAPSaPCfEgOPRwHyOJVtwcge3KGqawgVH86IGfmhQ7TEtML1SFENeMZd_VyBoCRa0QAvD_BwE','End_2','NumberSense_Operations'
+EXECUTE p_mint_upsert_resources 27,'Scholastic Success With Grade 1: Math ','Scholastic Teaching Resources','','workbook','','','','End_2','NumberSense_Operations'
+EXECUTE p_mint_upsert_resources 28,'Brain Quest Math Workbook: 1st Grade','Workman Publishing','','workbook','2024','','','End_2','NumberSense_Operations'
+EXECUTE p_mint_upsert_resources 29,'Grade 1 Math Workbook- 200 Essential Math Skills','Mathseeds','','workbook','','','','End_2','NumberSense_Operations'
+EXECUTE p_mint_upsert_resources 30,'Undersea Number Adventure #4 ','education.com ','','worksheet ','','','https://www.education.com/worksheet/article/put-numbers-in-order-4/?_gl=1*1f2mr3e*_up*MQ..&gclid=CjwKCAjwiNXFBhBKEiwAPSaPCfEgOPRwHyOJVtwcge3KGqawgVH86IGfmhQ7TEtML1SFENeMZd_VyBoCRa0QAvD_BwE','End_2','NumberSense_Operations'
+set IDENTITY_INSERT resources OFF
+
+
+--Query Answer 1
+select 
+    students.students_first_name
+    ,students.students_last_name
+    ,assessments.assessments_percent_correct
+    ,assessments.assessments_raw_score
+from students
+    left join assessments on students.students_student_id = assessments.assessments_student_id
+    left join math_skills on assessments.assessments_skill_id = math_skills.math_skills_skill_id
+    left join teachers on students.students_teacher_id = teachers.teachers_teacher_id
+where math_skills.math_skills_name = 'Add_Subtract_Regroup_100' and teachers.teachers_last_name = 'Shoots'
+order by assessments_percent_correct desc
+
+--Query Answer 2
+select 
+    students.students_first_name
+    ,students.students_last_name
+    ,math_skills.math_skills_name
+    ,assessments.assessments_percent_correct
+    ,assessments.assessments_raw_score
+from students
+    left join assessments on students.students_student_id = assessments.assessments_student_id
+    left join math_skills on assessments.assessments_skill_id = math_skills.math_skills_skill_id
+    left join teachers on students.students_teacher_id = teachers.teachers_teacher_id
+where students.students_last_name = 'Parker' and teachers.teachers_last_name = 'Vanderpoel'
+order by assessments_percent_correct desc
+
+--Query Answer 3
+select 
+    students.students_first_name
+    ,students.students_last_name
+    ,math_skills.math_skills_name
+    ,assessments.assessments_percent_correct
+    ,assessments.assessments_raw_score
+    ,AVG(practice_logs.practice_logs_practice_score) as avg_score
+from students
+    left join assessments on students.students_student_id = assessments.assessments_student_id
+    left join math_skills on assessments.assessments_skill_id = math_skills.math_skills_skill_id
+    left join teachers on students.students_teacher_id = teachers.teachers_teacher_id
+    left join practice_logs on students.students_student_id = practice_logs.practice_logs_student_id
+where teachers.teachers_last_name = 'Alinsonorin' and math_skills.math_skills_skill_id = 2
+group by students.students_first_name
+    ,students.students_last_name
+    ,math_skills.math_skills_name
+    ,assessments.assessments_percent_correct
+    ,assessments.assessments_raw_score
+order by assessments_percent_correct desc
+
+--Query Answer 4
+select *
+from resources
+where resources_skill_name = 'NumberSense_Operations'
+
+--Query Answer 5
+select 
+    students.students_first_name
+    ,students.students_last_name
+    ,math_skills.math_skills_name
+    ,AVG(practice_logs.practice_logs_practice_score) as avg_score
+    ,count(1) as num_practices
+from students
+    left join assessments on students.students_student_id = assessments.assessments_student_id
+    left join math_skills on assessments.assessments_skill_id = math_skills.math_skills_skill_id
+    left join practice_logs on students.students_student_id = practice_logs.practice_logs_student_id
+group by students.students_first_name
+    ,students.students_last_name
+    ,math_skills.math_skills_name
+order by avg_score desc
+
+--Query Answer 6
+select 
+    math_skills.math_skills_name
+    ,avg(assessments.assessments_theorized_score) as avg_theory_score
+    ,avg(assessments.assessments_raw_score) as avg_raw_score
+    ,AVG(practice_logs.practice_logs_practice_score) as avg_pracice_score
+from students
+    left join assessments on students.students_student_id = assessments.assessments_student_id
+    left join math_skills on assessments.assessments_skill_id = math_skills.math_skills_skill_id
+    left join practice_logs on students.students_student_id = practice_logs.practice_logs_student_id
+    left join teachers on teachers.teachers_teacher_id = students.students_teacher_id
+where teachers_grade = 2  
+group by students.students_first_name
+    ,students.students_last_name
+    ,math_skills.math_skills_name
+order by avg_theory_score desc
+
+--Query Answer 7
+select students.students_first_name
+  ,students.students_last_name
+  ,students.students_grade
+  ,avg(practice_logs.practice_logs_start_time - practice_logs.practice_logs_end_time) as avg_practice_time
+  ,max(practice_logs.practice_logs_start_time - practice_logs.practice_logs_end_time) as longest_session
+from students
+    left join practice_logs on students.students_student_id = practice_logs.practice_logs_student_id
+group by
+  students.students_last_name, students.students_grade
+order by
+  4 desc
